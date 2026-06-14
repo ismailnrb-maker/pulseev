@@ -44,29 +44,64 @@ const App = (() => {
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
 
-        try {
-          const res = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
+        // Show loading state on button
+        const btn = loginForm.querySelector('button[type="submit"]');
+        const originalText = btn.textContent;
+        btn.textContent = 'Connecting...';
+        btn.disabled = true;
 
-          if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'Access Denied: Invalid credentials');
+        try {
+          let authSuccess = false;
+
+          // Try API login first
+          try {
+            const res = await fetch('/api/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password }),
+              signal: AbortSignal.timeout(8000)
+            });
+
+            if (res.ok) {
+              const auth = await res.json();
+              localStorage.setItem('ev_auth_token', auth.token);
+              localStorage.setItem('ev_auth_username', auth.username);
+              localStorage.setItem('ev_auth_mode', 'api');
+              authSuccess = true;
+              showToast(`Welcome back, ${auth.username}! (Live Database)`, 'success');
+            } else if (res.status === 401) {
+              const err = await res.json();
+              throw new Error(err.detail || 'Access Denied: Invalid credentials');
+            } else {
+              // Server error — fall through to offline mode
+              throw new Error('server_error');
+            }
+          } catch (apiErr) {
+            if (apiErr.message !== 'server_error' && !apiErr.message.includes('fetch') && !apiErr.message.includes('timeout') && !apiErr.name?.includes('Abort')) {
+              throw apiErr; // Re-throw real auth errors (401)
+            }
+            // Offline fallback: accept admin/admin locally
+            if (username === 'admin' && password === 'admin') {
+              localStorage.setItem('ev_auth_token', 'offline-token-' + Date.now());
+              localStorage.setItem('ev_auth_username', 'admin');
+              localStorage.setItem('ev_auth_mode', 'offline');
+              authSuccess = true;
+              showToast(`Welcome back, admin! (Offline Mode — data saved in browser)`, 'warning');
+            } else {
+              throw new Error('Access Denied: Invalid credentials');
+            }
           }
 
-          const auth = await res.json();
-          localStorage.setItem('ev_auth_token', auth.token);
-          localStorage.setItem('ev_auth_username', auth.username);
-          
-          document.getElementById('login-screen').classList.remove('active');
-          showToast(`Welcome back, ${auth.username}!`, 'success');
-          
-          await Store.sync();
-          navigateTo('dashboard');
+          if (authSuccess) {
+            document.getElementById('login-screen').classList.remove('active');
+            await Store.sync();
+            navigateTo('dashboard');
+          }
         } catch (err) {
           showToast(err.message, 'error');
+        } finally {
+          btn.textContent = originalText;
+          btn.disabled = false;
         }
       });
     }
