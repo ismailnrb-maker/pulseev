@@ -18,7 +18,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 class User(Base):
-    __tablename__ = "users"
+    DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:////tmp/pulseev.db")
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     hashed_password = Column(String(100), nullable=False)
