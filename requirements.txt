@@ -1,8 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy>=2.0.31
 pyjwt
+bcrypt
 passlib[bcrypt]
 python-multipart
-pg8000
+psycopg2-binary
 cryptography

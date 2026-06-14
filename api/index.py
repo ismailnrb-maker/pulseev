@@ -25,10 +25,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Startup DB init
+# Startup DB init — fault-tolerant so a DB error doesn't crash all endpoints
 @app.on_event("startup")
 def startup_event():
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"startup init_db error (non-fatal): {e}")
+
+# ── Health / Debug endpoint ───────────────────────────────────────────────────
+@app.get("/api/health")
+def health():
+    import os
+    from api.database import DATABASE_URL, IS_POSTGRES
+    db_type = "postgres" if IS_POSTGRES else "sqlite"
+    masked = DATABASE_URL[:40] + "..." if len(DATABASE_URL) > 40 else DATABASE_URL
+    try:
+        from api.database import engine
+        with engine.connect() as conn:
+            conn.execute(__import__('sqlalchemy').text('SELECT 1'))
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)[:200]}"
+    return {"status": "ok", "db_type": db_type, "db_url_prefix": masked, "db_status": db_status}
 
 # --- Schemas ---
 from pydantic import BaseModel
