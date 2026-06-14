@@ -1,26 +1,43 @@
 import os
-from sqlalchemy import create_engine, Column, String, Integer, JSON
+import ssl
+from sqlalchemy import create_engine, Column, String, Integer, JSON, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Handle PostgreSQL connection string variant on Vercel
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///pulseev.db")
+# Vercel Neon Postgres injects several possible env vars — try all of them
+DATABASE_URL = (
+    os.environ.get("POSTGRES_URL") or
+    os.environ.get("DATABASE_URL") or
+    os.environ.get("POSTGRES_PRISMA_URL") or
+    "sqlite:///tmp/pulseev.db"
+)
 
-# Normalize postgres:// -> postgresql+pg8000:// for Neon/Vercel Postgres
+# Normalize all postgres:// variants to postgresql+pg8000://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+pg8000://", 1)
 elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
 
+# Strip ?sslmode=require if present — pg8000 uses ssl_context instead
+if "?sslmode=require" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("?sslmode=require", "")
+if "&sslmode=require" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("&sslmode=require", "")
+
 # Connect to database
 connect_args = {}
+engine_kwargs = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 elif "pg8000" in DATABASE_URL:
-    # Neon requires SSL
-    connect_args = {"ssl_context": True}
+    # Neon requires SSL — use Python's ssl module for pg8000
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    connect_args = {"ssl_context": ssl_ctx}
+    engine_kwargs = {"pool_pre_ping": True, "pool_size": 1, "max_overflow": 0}
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+engine = create_engine(DATABASE_URL, connect_args=connect_args, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
