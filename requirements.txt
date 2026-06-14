@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+sqlalchemy>=2.0.31
+pyjwt
+passlib[bcrypt]
+python-multipart
+pg8000
+cryptography
