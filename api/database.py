@@ -5,13 +5,20 @@ from sqlalchemy.orm import sessionmaker
 
 # Handle PostgreSQL connection string variant on Vercel
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///pulseev.db")
+
+# Normalize postgres:// -> postgresql+pg8000:// for Neon/Vercel Postgres
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+pg8000://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+pg8000://", 1)
 
 # Connect to database
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+elif "pg8000" in DATABASE_URL:
+    # Neon requires SSL
+    connect_args = {"ssl_context": True}
 
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
