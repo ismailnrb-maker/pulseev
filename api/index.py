@@ -71,7 +71,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     
     new_user = User(
         username=req.username,
-        hashed_password=hash_password(req.password)
+        hashed_password=hash_password(req.password),
+        role="pilot"
     )
     db.add(new_user)
     db.commit()
@@ -87,8 +88,8 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         )
     
     # Generate JWT token
-    token = create_access_token({"sub": user.username})
-    return {"token": token, "username": user.username}
+    token = create_access_token({"sub": user.username, "role": user.role})
+    return {"token": token, "username": user.username, "role": user.role}
 
 # --- Vehicle CRUD Routes ---
 
@@ -376,6 +377,150 @@ async def import_csv(
 
     db.commit()
     return {"type": "csv", "added": added, "updated": updated}
+
+# --- Session Tracking Routes ---
+from api.database import SessionLog
+from fastapi import Request
+
+@app.post("/api/tracking/session")
+def start_tracking_session(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    username = current_user.get("sub", "unknown")
+    
+    # Extract IP address
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        ip_address = x_forwarded_for.split(",")[0].strip()
+    else:
+        ip_address = request.headers.get("x-real-ip") or (request.client.host if request.client else "127.0.0.1")
+
+    # Extract Location from Vercel Geolocation headers
+    city = request.headers.get("x-vercel-ip-city")
+    region = request.headers.get("x-vercel-ip-country-region")
+    country = request.headers.get("x-vercel-ip-country")
+    
+    if city or region or country:
+        parts = [p for p in [city, region, country] if p]
+        location = ", ".join(parts)
+    else:
+        # Fallback for local testing
+        if ip_address in ("127.0.0.1", "::1"):
+            location = "Localhost Development"
+        else:
+            location = "Local Network / Private IP"
+
+    now_str = datetime.datetime.utcnow().isoformat() + "Z"
+    session_id = str(uuid.uuid4())
+    
+    new_session = SessionLog(
+        id=session_id,
+        username=username,
+        ipAddress=ip_address,
+        location=location,
+        startedAt=now_str,
+        lastHeartbeat=now_str,
+        durationSeconds=0
+    )
+    db.add(new_session)
+    db.commit()
+    
+    return {"session_id": session_id, "location": location, "ip": ip_address}
+
+
+@app.post("/api/tracking/heartbeat/{session_id}")
+def tracking_heartbeat(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    session_record = db.query(SessionLog).filter(SessionLog.id == session_id).first()
+    if not session_record:
+        raise HTTPException(status_code=404, detail="Tracking session not found")
+        
+    now = datetime.datetime.utcnow()
+    # Calculate duration
+    try:
+        started_at = datetime.datetime.fromisoformat(session_record.startedAt.replace("Z", "+00:00"))
+        started_naive = started_at.replace(tzinfo=None)
+        elapsed = now - started_naive
+        session_record.durationSeconds = max(0, int(elapsed.total_seconds()))
+    except Exception:
+        session_record.durationSeconds += 30
+
+    session_record.lastHeartbeat = now.isoformat() + "Z"
+    db.commit()
+    
+    return {"status": "ok", "duration": session_record.durationSeconds}
+
+
+@app.get("/api/tracking/stats")
+def get_tracking_stats(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # Check if the user is authorized (role must be master)
+    user_role = current_user.get("role", "pilot")
+    if user_role != "master":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: Only Master Admin can view usage analytics."
+        )
+
+    # 1. Total site opens
+    total_opens = db.query(SessionLog).count()
+
+    # 2. Active sessions (heartbeat within the last 90 seconds to allow buffer)
+    now = datetime.datetime.utcnow()
+    cutoff_time = now - datetime.timedelta(seconds=90)
+    cutoff_str = cutoff_time.isoformat() + "Z"
+    
+    active_sessions = db.query(SessionLog).filter(SessionLog.lastHeartbeat >= cutoff_str).count()
+
+    # 3. Total usage duration in hours
+    total_seconds = db.query(__import__('sqlalchemy').func.sum(SessionLog.durationSeconds)).scalar() or 0
+    total_hours = round(total_seconds / 3600.0, 2)
+
+    # 4. Location summary
+    locations_query = db.query(SessionLog.location, __import__('sqlalchemy').func.count(SessionLog.id)).group_by(SessionLog.location).all()
+    locations = [{"location": loc or "Unknown", "count": count} for loc, count in locations_query]
+
+    # 5. User usage ranks
+    users_query = db.query(
+        SessionLog.username,
+        __import__('sqlalchemy').func.count(SessionLog.id),
+        __import__('sqlalchemy').func.sum(SessionLog.durationSeconds)
+    ).group_by(SessionLog.username).all()
+    
+    user_activity = [
+        {"username": user, "opens": count, "durationMinutes": round((duration or 0) / 60.0, 1)}
+        for user, count, duration in users_query
+    ]
+
+    # 6. Recent sessions (last 20 logs)
+    recent_query = db.query(SessionLog).order_by(SessionLog.startedAt.desc()).limit(20).all()
+    recent_sessions = [
+        {
+            "id": s.id,
+            "username": s.username,
+            "ipAddress": s.ipAddress,
+            "location": s.location,
+            "startedAt": s.startedAt,
+            "durationSeconds": s.durationSeconds
+        }
+        for s in recent_query
+    ]
+
+    return {
+        "totalOpens": total_opens,
+        "activeSessions": active_sessions,
+        "totalUsageHours": total_hours,
+        "locations": locations,
+        "userActivity": user_activity,
+        "recentSessions": recent_sessions
+    }
 
 # --- Static File Serving (For local testing fallback) ---
 

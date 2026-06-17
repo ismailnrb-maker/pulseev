@@ -30,6 +30,8 @@ const App = (() => {
       signoutBtn.addEventListener('click', () => {
         localStorage.removeItem('ev_auth_token');
         localStorage.removeItem('ev_auth_username');
+        localStorage.removeItem('ev_auth_role');
+        sessionStorage.removeItem('ev_tracking_session_id');
         Store.clearAll();
         document.getElementById('login-screen').classList.add('active');
         showToast('You have signed out successfully.', 'info');
@@ -66,6 +68,7 @@ const App = (() => {
               const auth = await res.json();
               localStorage.setItem('ev_auth_token', auth.token);
               localStorage.setItem('ev_auth_username', auth.username);
+              localStorage.setItem('ev_auth_role', auth.role || 'pilot');
               localStorage.setItem('ev_auth_mode', 'api');
               authSuccess = true;
               showToast(`Welcome back, ${auth.username}! (Live Database)`, 'success');
@@ -80,10 +83,18 @@ const App = (() => {
             if (apiErr.message !== 'server_error' && !apiErr.message.includes('fetch') && !apiErr.message.includes('timeout') && !apiErr.name?.includes('Abort')) {
               throw apiErr; // Re-throw real auth errors (401)
             }
-            // Offline fallback: accept admin/admin locally
-            if (username === 'admin' && password === 'admin') {
+            // Offline fallback: accept master/master or admin/admin locally
+            if (username === 'master' && password === 'master') {
+              localStorage.setItem('ev_auth_token', 'offline-token-' + Date.now());
+              localStorage.setItem('ev_auth_username', 'master');
+              localStorage.setItem('ev_auth_role', 'master');
+              localStorage.setItem('ev_auth_mode', 'offline');
+              authSuccess = true;
+              showToast(`Welcome back, master! (Offline Mode — data saved in browser)`, 'warning');
+            } else if (username === 'admin' && password === 'admin') {
               localStorage.setItem('ev_auth_token', 'offline-token-' + Date.now());
               localStorage.setItem('ev_auth_username', 'admin');
+              localStorage.setItem('ev_auth_role', 'pilot');
               localStorage.setItem('ev_auth_mode', 'offline');
               authSuccess = true;
               showToast(`Welcome back, admin! (Offline Mode — data saved in browser)`, 'warning');
@@ -94,7 +105,9 @@ const App = (() => {
 
           if (authSuccess) {
             document.getElementById('login-screen').classList.remove('active');
+            configureUserRoleUI();
             await Store.sync();
+            Store.startTrackingSession();
             navigateTo('dashboard');
           }
         } catch (err) {
@@ -207,14 +220,33 @@ const App = (() => {
       document.getElementById('login-screen').classList.add('active');
     } else {
       document.getElementById('login-screen').classList.remove('active');
+      configureUserRoleUI();
       const synced = await Store.sync();
       if (synced) {
+        Store.startTrackingSession();
         navigateTo('dashboard');
       }
     }
   }
 
+  function configureUserRoleUI() {
+    const role = localStorage.getItem('ev_auth_role') || 'pilot';
+    const analyticsNav = document.getElementById('nav-analytics');
+    if (analyticsNav) {
+      if (role === 'master') {
+        analyticsNav.classList.remove('hidden');
+      } else {
+        analyticsNav.classList.add('hidden');
+      }
+    }
+  }
+
   function navigateTo(page, vehicleId = null) {
+    const role = localStorage.getItem('ev_auth_role') || 'pilot';
+    if (page === 'analytics' && role !== 'master') {
+      page = 'dashboard';
+    }
+
     currentPage = page;
     activeVehicleId = vehicleId;
 
@@ -234,7 +266,8 @@ const App = (() => {
       services: 'Service Tracker',
       battery: 'Battery Upgrade Center',
       registration: 'Registration Workflow',
-      kilometers: 'Kilometer Intelligence'
+      kilometers: 'Kilometer Intelligence',
+      analytics: 'Usage & Pilot Analytics'
     };
     
     document.getElementById('header-page-title').innerText = vehicleId ? 'Vehicle Profile Details' : (titles[page] || 'PulseEV');
@@ -265,6 +298,9 @@ const App = (() => {
           break;
         case 'kilometers':
           KilometersView.render(pageView);
+          break;
+        case 'analytics':
+          AnalyticsView.render(pageView);
           break;
         default:
           DashboardView.render(pageView);

@@ -54,6 +54,18 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     hashed_password = Column(String(100), nullable=False)
+    role = Column(String(20), default="pilot", nullable=False)
+
+
+class SessionLog(Base):
+    __tablename__ = "session_logs"
+    id = Column(String(50), primary_key=True, index=True)
+    username = Column(String(50), nullable=False)
+    ipAddress = Column(String(50), nullable=True)
+    location = Column(String(200), nullable=True)
+    startedAt = Column(String(30), nullable=False)
+    lastHeartbeat = Column(String(30), nullable=False)
+    durationSeconds = Column(Integer, default=0, nullable=False)
 
 
 class Vehicle(Base):
@@ -99,16 +111,19 @@ def init_db():
 
     db = SessionLocal()
     try:
-        # Seed default admin user if table is empty
+        # Seed default users (admin and master) if table is empty
         user_count = db.query(User).count()
         if user_count == 0:
-            pwd_bytes = b"admin"
             salt = bcrypt.gensalt()
-            hashed_pw = bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
-            admin = User(username="admin", hashed_password=hashed_pw)
-            db.add(admin)
+            # Seed pilot user 'admin'
+            hashed_admin = bcrypt.hashpw(b"admin", salt).decode("utf-8")
+            admin = User(username="admin", hashed_password=hashed_admin, role="pilot")
+            # Seed master admin 'master'
+            hashed_master = bcrypt.hashpw(b"master", salt).decode("utf-8")
+            master = User(username="master", hashed_password=hashed_master, role="master")
+            db.add_all([admin, master])
             db.commit()
-            print("Seeded default user: admin / admin")
+            print("Seeded default users: admin/admin (pilot) and master/master (master)")
 
         # Seed 10 vehicle profiles if empty
         vehicle_count = db.query(Vehicle).count()

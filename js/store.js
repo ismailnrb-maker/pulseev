@@ -452,6 +452,76 @@ const Store = (() => {
     a.click();
   }
 
+  // --- Usage Tracking Analytics ---
+  let trackingInterval = null;
+
+  async function startTrackingSession() {
+    const existingSession = sessionStorage.getItem('ev_tracking_session_id');
+    const token = localStorage.getItem('ev_auth_token');
+    const authMode = localStorage.getItem('ev_auth_mode');
+
+    if (!token || authMode === 'offline') return;
+
+    if (existingSession) {
+      startHeartbeatTimer(existingSession);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/tracking/session', {
+        method: 'POST',
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        sessionStorage.setItem('ev_tracking_session_id', data.session_id);
+        startHeartbeatTimer(data.session_id);
+      }
+    } catch (err) {
+      console.warn('Failed to start usage tracking session:', err);
+    }
+  }
+
+  function startHeartbeatTimer(sessionId) {
+    if (trackingInterval) clearInterval(trackingInterval);
+    sendHeartbeat(sessionId);
+    trackingInterval = setInterval(() => {
+      sendHeartbeat(sessionId);
+    }, 30000);
+  }
+
+  async function sendHeartbeat(sessionId) {
+    const token = localStorage.getItem('ev_auth_token');
+    if (!token) {
+      if (trackingInterval) {
+        clearInterval(trackingInterval);
+        trackingInterval = null;
+      }
+      return;
+    }
+
+    try {
+      await fetch(`/api/tracking/heartbeat/${sessionId}`, {
+        method: 'POST',
+        headers: getHeaders()
+      });
+    } catch (err) {
+      console.warn('Heartbeat update failed:', err);
+    }
+  }
+
+  async function getTrackingStats() {
+    const res = await fetch('/api/tracking/stats', {
+      headers: getHeaders()
+    });
+    if (res.status === 401) return handleUnauthorized();
+    if (res.status === 403) {
+      throw new Error('Access Denied: Only Master Admin accounts can view tracking logs.');
+    }
+    if (!res.ok) throw new Error('Failed to retrieve tracking stats');
+    return await res.json();
+  }
+
   // Legacy local check fallbacks
   function isSeeded() {
     return cache.vehicles.length > 0;
@@ -502,6 +572,8 @@ const Store = (() => {
     exportData,
     importData,
     downloadCsvTemplate,
+    startTrackingSession,
+    getTrackingStats,
     clearAll,
     isSeeded,
     _defaultServices,
