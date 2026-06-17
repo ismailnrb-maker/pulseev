@@ -119,19 +119,29 @@ def init_db():
         except Exception:
             db.rollback()
 
-        # Seed default users (admin and master) if table is empty
-        user_count = db.query(User).count()
-        if user_count == 0:
+        # Ensure default pilot user 'admin' exists
+        admin_user = db.query(User).filter(User.username == "admin").first()
+        if not admin_user:
             salt = bcrypt.gensalt()
-            # Seed pilot user 'admin'
             hashed_admin = bcrypt.hashpw(b"admin", salt).decode("utf-8")
             admin = User(username="admin", hashed_password=hashed_admin, role="pilot")
-            # Seed master admin 'master'
+            db.add(admin)
+            db.commit()
+
+        # Ensure master admin user 'master' exists and has correct role
+        master_user = db.query(User).filter(User.username == "master").first()
+        if not master_user:
+            salt = bcrypt.gensalt()
             hashed_master = bcrypt.hashpw(b"master", salt).decode("utf-8")
             master = User(username="master", hashed_password=hashed_master, role="master")
-            db.add_all([admin, master])
+            db.add(master)
             db.commit()
-            print("Seeded default users: admin/admin (pilot) and master/master (master)")
+            print("Seeded master admin user.")
+        else:
+            if master_user.role != "master":
+                master_user.role = "master"
+                db.commit()
+                print("Updated existing master user to master role.")
 
         # Seed 10 vehicle profiles if empty
         vehicle_count = db.query(Vehicle).count()
