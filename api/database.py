@@ -111,6 +111,14 @@ def init_db():
 
     db = SessionLocal()
     try:
+        # Schema migration fallback for existing deployments
+        from sqlalchemy import text
+        try:
+            db.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'pilot' NOT NULL"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         # Seed default users (admin and master) if table is empty
         user_count = db.query(User).count()
         if user_count == 0:
