@@ -412,7 +412,6 @@ const App = (() => {
       document.getElementById('form-vehicle-id').value = v.id;
       document.getElementById('form-vin').value = v.vin || '';
       document.getElementById('form-model').value = v.model || '';
-      document.getElementById('form-chassis').value = v.chassisNo || '';
       document.getElementById('form-motor').value = v.motorNo || '';
       document.getElementById('form-controller').value = v.controllerNo || '';
       document.getElementById('form-battery-serial').value = v.batteryPackNo || '';
@@ -437,7 +436,7 @@ const App = (() => {
     const vehicleData = {
       vin: document.getElementById('form-vin').value.trim().toUpperCase(),
       model: document.getElementById('form-model').value,
-      chassisNo: document.getElementById('form-chassis').value.trim(),
+      chassisNo: document.getElementById('form-vin').value.trim().toUpperCase(),
       motorNo: document.getElementById('form-motor').value.trim(),
       controllerNo: document.getElementById('form-controller').value.trim(),
       batteryPackNo: document.getElementById('form-battery-serial').value.trim(),

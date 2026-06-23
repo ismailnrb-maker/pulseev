@@ -70,13 +70,12 @@ def create_excel_template():
     ws_ref.row_dimensions[15].height = 24
 
     field_rules = [
-        ("vin", "YES", "17-digit alphanumeric string", "Unique Vehicle Identification Number. Used as key for updating records."),
-        ("model", "YES", "Comet / Cosmo", "EV Model Variant. Select from dropdown."),
-        ("chassisNo", "YES", "Alphanumeric string (e.g. CH-2024-0001)", "Chassis serial identification number."),
+        ("vin", "YES", "Alphanumeric string", "VIN / Chassis Number (Primary Key)."),
+        ("model", "YES", "Text (Comet or Cosmo)", "Specific EV model name. Must match allowed list."),
         ("motorNo", "YES", "Alphanumeric string (e.g. MT-ZF-78001)", "Electric Motor serial identification number."),
         ("controllerNo", "NO", "Alphanumeric string (e.g. CT-INV-44001)", "Controller unit serial number."),
         ("batteryPackNo", "NO", "Alphanumeric string (e.g. BP-LFP-96001)", "Active Battery Pack serial number."),
-        ("manufacturingDate", "YES", "YYYY-MM-DD (Date)", "Date of factory assembly/manufacturing completion."),
+        ("manufacturingDate", "YES", "YYYY-MM-DD (Date)", "Date of purchase."),
         ("customerName", "YES", "Full Name string", "Assigned customer owner's name."),
         ("customerPhone", "YES", "Phone pattern (e.g. +91-98765-43210)", "Contact mobile/WhatsApp number."),
         ("customerLocation", "YES", "City, State (e.g. Mumbai, MH)", "Delivery region / operational city location."),
@@ -134,7 +133,7 @@ def create_excel_template():
     ws_tpl.views.sheetView[0].showGridLines = True
     
     headers = [
-        "vin", "model", "chassisNo", "motorNo", "controllerNo", "batteryPackNo",
+        "vin", "model", "motorNo", "controllerNo", "batteryPackNo",
         "manufacturingDate", "customerName", "customerPhone", "customerLocation",
         "deliveryDate", "currentKm", "registrationStatus", "registrationNumber",
         "batteryReplacementAffected", "batteryReplacementCampaignId", "batteryReplacementStatus",
@@ -153,7 +152,7 @@ def create_excel_template():
     
     # Sample Row 1 (Comet)
     sample_1 = [
-        "MAT45678901234501", "Comet", "CH-2024-0001", "MT-ZF-78001", "CT-INV-44001", "BP-LFP-96001",
+        "MAT45678901234501", "Comet", "MT-ZF-78001", "CT-INV-44001", "BP-LFP-96001",
         "2024-01-10", "Rajesh Mehra", "+91-9876543201", "Mumbai, MH",
         "2024-02-15", 12500, "completed", "MH-02-XX-1234",
         "TRUE", "BC-2024-001", "completed", "BP-LFP-96001", "BP-LFP-96001-R", "2024-07-20",
@@ -162,7 +161,7 @@ def create_excel_template():
     
     # Sample Row 2 (Cosmo)
     sample_2 = [
-        "MAT45678901234502", "Cosmo", "CH-2024-0002", "MT-ZF-78002", "CT-INV-44002", "BP-NMC-72002",
+        "MAT45678901234502", "Cosmo", "MT-ZF-78002", "CT-INV-44002", "BP-NMC-72002",
         "2024-02-05", "Priya Sharma", "+91-9876543202", "Delhi, DL",
         "2024-03-01", 8700, "completed", "DL-3C-AB-5678",
         "TRUE", "BC-2024-001", "pending", "BP-NMC-72002", "", "",
@@ -195,36 +194,36 @@ def create_excel_template():
     ws_tpl.add_data_validation(dv_model)
     dv_model.add("B2:B100")
 
-    # 2. Registration Status Validation (Col M)
+    # 2. Registration Status Validation (Col L)
     dv_reg = DataValidation(type="list", formula1='"delivered,documents_pending,submitted,completed"', allow_blank=True)
     dv_reg.error = 'Must choose delivered, documents_pending, submitted, or completed'
     dv_reg.errorTitle = 'Invalid Registration Status'
     dv_reg.prompt = 'Select registration stage'
     dv_reg.promptTitle = 'Select Status'
     ws_tpl.add_data_validation(dv_reg)
-    dv_reg.add("M2:M100")
+    dv_reg.add("L2:L100")
 
-    # 3. Battery Replacement Status Validation (Col Q)
+    # 3. Battery Replacement Status Validation (Col P)
     dv_bat_status = DataValidation(type="list", formula1='"not_affected,pending,in_progress,completed"', allow_blank=True)
     dv_bat_status.error = 'Must choose not_affected, pending, in_progress, or completed'
     dv_bat_status.errorTitle = 'Invalid Upgrade Status'
     ws_tpl.add_data_validation(dv_bat_status)
-    dv_bat_status.add("Q2:Q100")
+    dv_bat_status.add("P2:P100")
 
-    # 4. Booleans (Cols O, V)
+    # 4. Booleans (Cols N, U)
     dv_bool = DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=True)
     dv_bool.error = 'Must enter TRUE or FALSE'
     dv_bool.errorTitle = 'Invalid Boolean Value'
     ws_tpl.add_data_validation(dv_bool)
-    dv_bool.add("O2:O100")
-    dv_bool.add("V2:V100")
+    dv_bool.add("N2:N100")
+    dv_bool.add("U2:U100")
 
     wb.save("ev_lifecycle_template.xlsx")
     print("Excel template 'ev_lifecycle_template.xlsx' created successfully.")
 
 def create_csv_template():
     headers = [
-        "vin", "model", "chassisNo", "motorNo", "controllerNo", "batteryPackNo",
+        "vin", "model", "motorNo", "controllerNo", "batteryPackNo",
         "manufacturingDate", "customerName", "customerPhone", "customerLocation",
         "deliveryDate", "currentKm", "registrationStatus", "registrationNumber",
         "batteryReplacementAffected", "batteryReplacementCampaignId", "batteryReplacementStatus",
@@ -232,7 +231,7 @@ def create_csv_template():
         "batteryReplacementTechnician", "batteryReplacementCustomerConfirmed"
     ]
     sample_row = [
-        "MAT45678901234501", "Comet", "CH-2024-0001", "MT-ZF-78001", "CT-INV-44001", "BP-LFP-96001",
+        "MAT45678901234501", "Comet", "MT-ZF-78001", "CT-INV-44001", "BP-LFP-96001",
         "2024-01-10", "Rajesh Mehra", "+91-9876543201", "Mumbai, MH",
         "2024-02-15", "12500", "completed", "MH-02-XX-1234",
         "TRUE", "BC-2024-001", "completed", "BP-LFP-96001", "BP-LFP-96001-R", "2024-07-20",

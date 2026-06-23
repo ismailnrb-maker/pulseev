@@ -105,7 +105,7 @@ const VehicleDetailView = (() => {
                 <span class="detail-value mono">${v.vin}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Chassis Serial</span>
+                <span class="detail-label">VIN / Chassis Number</span>
                 <span class="detail-value mono">${v.chassisNo}</span>
               </div>
               <div class="detail-item">
@@ -121,7 +121,7 @@ const VehicleDetailView = (() => {
                 <span class="detail-value mono">${v.batteryPackNo || 'N/A'}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Mfg. Date</span>
+                <span class="detail-label">Date of Purchase</span>
                 <span class="detail-value">${v.manufacturingDate}</span>
               </div>
             </div>

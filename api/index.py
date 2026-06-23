@@ -237,9 +237,20 @@ async def import_csv(
     current_user: dict = Depends(get_current_user)
 ):
     contents = await file.read()
-    buffer = io.StringIO(contents.decode('utf-8'))
-    reader = csv.reader(buffer)
-    rows = list(reader)
+    filename = file.filename.lower()
+
+    if filename.endswith(".xlsx"):
+        import openpyxl
+        buffer = io.BytesIO(contents)
+        wb = openpyxl.load_workbook(buffer, data_only=True)
+        ws = wb["EV Import Template"] if "EV Import Template" in wb.sheetnames else wb.active
+        rows = []
+        for r in ws.iter_rows(values_only=True):
+            rows.append([str(c).strip() if c is not None else "" for c in r])
+    else:
+        buffer = io.StringIO(contents.decode('utf-8'))
+        reader = csv.reader(buffer)
+        rows = list(reader)
 
     if len(rows) < 2:
         raise HTTPException(status_code=400, detail="CSV is empty or missing data rows")
@@ -301,7 +312,7 @@ async def import_csv(
         if existing:
             # Update
             existing.model = model
-            existing.chassisNo = vehicle_row.get("chassisNo") or existing.chassisNo
+            existing.chassisNo = vin_val
             existing.motorNo = vehicle_row.get("motorNo") or existing.motorNo
             existing.controllerNo = vehicle_row.get("controllerNo") or existing.controllerNo
             existing.batteryPackNo = vehicle_row.get("batteryPackNo") or existing.batteryPackNo
@@ -344,7 +355,7 @@ async def import_csv(
                 id=str(uuid.uuid4()),
                 vin=vin_val,
                 model=model,
-                chassisNo=vehicle_row.get("chassisNo", ""),
+                chassisNo=vin_val,
                 motorNo=vehicle_row.get("motorNo", ""),
                 controllerNo=vehicle_row.get("controllerNo", ""),
                 batteryPackNo=vehicle_row.get("batteryPackNo", ""),
