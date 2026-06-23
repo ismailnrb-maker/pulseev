@@ -447,8 +447,8 @@ const Store = (() => {
 
   function downloadCsvTemplate() {
     const a = document.createElement('a');
-    a.href = '/ev_lifecycle_template.csv';
-    a.download = 'ev_lifecycle_template.csv';
+    a.href = '/ev_lifecycle_template.xlsx';
+    a.download = 'ev_lifecycle_template.xlsx';
     a.click();
   }
 
