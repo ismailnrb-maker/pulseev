@@ -26,9 +26,8 @@ env/
 
 # Excel / CSV test files
 *.xlsx
+!ev_lifecycle_template.xlsx
 test_import.csv
-ev_lifecycle_template.csv
-ev_lifecycle_template.xlsx
 
 # OS files
 .DS_Store
