@@ -102,6 +102,201 @@ class Vehicle(Base):
 
 
 # ── DB Init (seeding) ─────────────────────────────────────────────────────────
+def generate_seed_vehicles(count=200):
+    import random
+    random.seed(42)
+    
+    first_names = ['Rajesh', 'Priya', 'Amit', 'Sneha', 'Vikash', 'Ananya', 'Deepak', 'Kavita', 'Rohit', 'Sunita', 'Aarav', 'Vihaan', 'Aditya', 'Sai', 'Arjun', 'Krishna', 'Ishaan', 'Shaurya', 'Pranav', 'Aryan', 'Diya', 'Ananya', 'Aanya', 'Pihu', 'Prisha', 'Saanvi', 'Anika', 'Zara', 'Meera', 'Riya', 'Rahul', 'Sanjay', 'Manoj', 'Rohan', 'Karan', 'Dev', 'Vijay', 'Raj', 'Alok', 'Vikram']
+    last_names = ['Mehra', 'Sharma', 'Joshi', 'Kulkarni', 'Gupta', 'Reddy', 'Nair', 'Singh', 'Deshmukh', 'Patil', 'Kumar', 'Verma', 'Yadav', 'Patel', 'Das', 'Choudhury', 'Banerjee', 'Mishra', 'Trivedi', 'Rao', 'Bose', 'Pillai', 'Jha', 'Kapoor', 'Mehta', 'Grover', 'Sen', 'Dutta', 'Chatterjee']
+    
+    cities = ['Mumbai, MH', 'Delhi, DL', 'Bengaluru, KA', 'Pune, MH', 'Hyderabad, TS', 'Chennai, TN', 'Ahmedabad, GJ', 'Jaipur, RJ', 'Kolkata, WB', 'Lucknow, UP']
+    technicians = ['Vikram Singh', 'Rajesh Kumar', 'Arjun Patel', 'Sanjay Verma', 'Manoj Sharma', 'Amit Yadav']
+    
+    state_mapping = {
+        'Mumbai, MH': 'MH-02', 'Pune, MH': 'MH-12', 'Delhi, DL': 'DL-3C', 
+        'Bengaluru, KA': 'KA-03', 'Hyderabad, TS': 'TS-09', 'Chennai, TN': 'TN-09',
+        'Ahmedabad, GJ': 'GJ-01', 'Jaipur, RJ': 'RJ-14', 'Kolkata, WB': 'WB-02',
+        'Lucknow, UP': 'UP-32'
+    }
+    
+    vehicles = []
+    models = ['Comet'] * 140 + ['Cosmo'] * 60
+    battery_statuses = (
+        [('completed', True)] * 60 +
+        [('in_progress', False)] * 20 +
+        [('pending', False)] * 20 +
+        [('not_affected', False)] * 100
+    )
+    
+    random.shuffle(models)
+    random.shuffle(battery_statuses)
+    
+    vins = [f"MAT45678901234{idx}" for idx in range(101, 301)]
+    
+    start_date = datetime.date(2023, 1, 1)
+    end_date = datetime.date(2026, 8, 25)
+    days_range = (end_date - start_date).days
+    
+    now_str = datetime.datetime.utcnow().isoformat() + "Z"
+    
+    for i in range(count):
+        vin = vins[i]
+        model = models[i]
+        
+        random_days = random.randint(0, days_range)
+        mfg_date = start_date + datetime.timedelta(days=random_days)
+        del_date = mfg_date + datetime.timedelta(days=random.randint(5, 25))
+        
+        if mfg_date > datetime.date(2026, 8, 30):
+            mfg_date = datetime.date(2026, 8, 30) - datetime.timedelta(days=random.randint(5, 20))
+        if del_date > datetime.date(2026, 8, 30):
+            del_date = datetime.date(2026, 8, 30)
+            
+        mfg_date_str = mfg_date.isoformat()
+        del_date_str = del_date.isoformat()
+        
+        months_active = (datetime.date(2026, 8, 30) - del_date).days // 30
+        months_active = max(1, months_active)
+        
+        km_per_month = random.randint(600, 1200)
+        current_km = months_active * km_per_month
+        
+        location = random.choice(cities)
+        cust_name = f"{random.choice(first_names)} {random.choice(last_names)}"
+        cust_phone = f"+91-98765{random.randint(10000, 99999)}"
+        
+        if months_active >= 2:
+            reg_status = 'completed'
+            state_prefix = state_mapping[location]
+            letters = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=2))
+            nums = f"{random.randint(1000, 9999)}"
+            reg_number = f"{state_prefix}-{letters}-{nums}"
+        else:
+            reg_status = random.choice(['completed', 'submitted', 'documents_pending', 'delivered'])
+            if reg_status == 'completed':
+                state_prefix = state_mapping[location]
+                letters = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=2))
+                nums = f"{random.randint(1000, 9999)}"
+                reg_number = f"{state_prefix}-{letters}-{nums}"
+            else:
+                reg_number = ''
+                
+        services = []
+        due_milestones = [1000, 5000, 10000, 20000]
+        for service_idx, due_km in enumerate(due_milestones, start=1):
+            service_completed = current_km >= due_km
+            if service_completed:
+                completed_km = due_km + random.randint(-200, 500)
+                completed_km = max(100, completed_km)
+                days_to_reach = int((completed_km / km_per_month) * 30)
+                service_date = del_date + datetime.timedelta(days=days_to_reach)
+                if service_date > datetime.date(2026, 8, 30):
+                    service_date = datetime.date(2026, 8, 30) - datetime.timedelta(days=random.randint(1, 15))
+                service_date_str = service_date.isoformat()
+                technician = random.choice(technicians)
+                issues = random.choice(['None', 'None', 'None', 'Wheel alignment check', 'Minor brake pad adjustment', 'Software patch applied'])
+            else:
+                completed_km = 0
+                service_date_str = ''
+                technician = ''
+                issues = ''
+                
+            services.append({
+                "serviceNumber": service_idx,
+                "dueKm": due_km,
+                "completedKm": completed_km,
+                "date": service_date_str,
+                "technician": technician,
+                "issues": issues
+            })
+            
+        km_log = []
+        for s in services:
+            if s["completedKm"] > 0:
+                log_month = s["date"][:7]
+                km_log.append({"month": log_month, "km": s["completedKm"]})
+        current_month = "2026-08"
+        if not any(k["month"] == current_month for k in km_log):
+            km_log.append({"month": current_month, "km": current_km})
+        km_log.sort(key=lambda x: x["month"])
+        unique_km_log = []
+        seen_months = set()
+        for k in km_log:
+            if k["month"] not in seen_months:
+                unique_km_log.append(k)
+                seen_months.add(k["month"])
+        km_log = unique_km_log
+        
+        bat_status, cust_conf = battery_statuses[i]
+        is_affected = bat_status != 'not_affected'
+        campaign_id = 'BC-2024-001' if is_affected else ''
+        
+        battery_prefix = 'BP-LFP-96' if model == 'Comet' else 'BP-NMC-72'
+        old_serial = f"{battery_prefix}{i+1:03d}"
+        
+        if bat_status == 'completed':
+            new_serial = f"{old_serial}-R"
+            replace_days = random.randint(90, 360)
+            replace_date = del_date + datetime.timedelta(days=replace_days)
+            if replace_date > datetime.date(2026, 8, 30):
+                replace_date = datetime.date(2026, 8, 30) - datetime.timedelta(days=random.randint(10, 60))
+            replace_date_str = replace_date.isoformat()
+            technician = random.choice(technicians)
+        else:
+            new_serial = ''
+            replace_date_str = ''
+            if bat_status == 'in_progress':
+                technician = random.choice(technicians)
+            else:
+                technician = ''
+                
+        battery_replacement = {
+            "affected": is_affected,
+            "campaignId": campaign_id,
+            "status": bat_status,
+            "oldSerial": old_serial if is_affected else '',
+            "newSerial": new_serial,
+            "replacementDate": replace_date_str,
+            "technician": technician,
+            "customerConfirmed": cust_conf
+        }
+        
+        chassis_no = f"CH-{del_date.year}-{i+1:03d}"
+        motor_no = f"MT-ZF-78{i+1:03d}"
+        controller_no = f"CT-INV-44{i+1:03d}"
+        
+        reg_dates = {"delivered": del_date_str}
+        if reg_status in ['completed', 'submitted', 'documents_pending']:
+            reg_dates[reg_status] = del_date_str
+            
+        vehicles.append(Vehicle(
+            id=str(uuid.uuid4()),
+            vin=vin,
+            model=model,
+            chassisNo=chassis_no,
+            motorNo=motor_no,
+            controllerNo=controller_no,
+            batteryPackNo=old_serial,
+            manufacturingDate=mfg_date_str,
+            customerName=cust_name,
+            customerPhone=cust_phone,
+            customerLocation=location,
+            deliveryDate=del_date_str,
+            currentKm=current_km,
+            registrationStatus=reg_status,
+            registrationNumber=reg_number,
+            registrationDates=reg_dates,
+            registrationNotes={"completed": reg_number} if reg_number else {},
+            batteryReplacement=battery_replacement,
+            services=services,
+            kmLog=km_log,
+            createdAt=now_str,
+            updatedAt=now_str
+        ))
+        
+    return vehicles
+
+
 def init_db():
     try:
         Base.metadata.create_all(bind=engine)
@@ -143,35 +338,13 @@ def init_db():
                 db.commit()
                 print("Updated existing master user to master role.")
 
-        # Seed 10 vehicle profiles if empty
+        # Seed 200 vehicle profiles if empty
         vehicle_count = db.query(Vehicle).count()
         if vehicle_count == 0:
-            def mk_services(c1=0,d1='',t1='',i1='',c2=0,d2='',t2='',i2='',c3=0,d3='',t3='',i3='',c4=0,d4='',t4='',i4=''):
-                return [
-                    {"serviceNumber":1,"dueKm":1000,"completedKm":c1,"date":d1,"technician":t1,"issues":i1},
-                    {"serviceNumber":2,"dueKm":5000,"completedKm":c2,"date":d2,"technician":t2,"issues":i2},
-                    {"serviceNumber":3,"dueKm":10000,"completedKm":c3,"date":d3,"technician":t3,"issues":i3},
-                    {"serviceNumber":4,"dueKm":20000,"completedKm":c4,"date":d4,"technician":t4,"issues":i4},
-                ]
-            def mk_battery(affected=False,campaignId='',status='not_affected',oldSerial='',newSerial='',replacementDate='',technician='',customerConfirmed=False):
-                return {"affected":affected,"campaignId":campaignId,"status":status,"oldSerial":oldSerial,"newSerial":newSerial,"replacementDate":replacementDate,"technician":technician,"customerConfirmed":customerConfirmed}
-
-            now = datetime.datetime.utcnow().isoformat() + "Z"
-            vehicles = [
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234501",model="Comet",chassisNo="CH-2024-0001",motorNo="MT-ZF-78001",controllerNo="CT-INV-44001",batteryPackNo="BP-LFP-96001",manufacturingDate="2024-01-10",customerName="Rajesh Mehra",customerPhone="+91-9876543201",customerLocation="Mumbai, MH",deliveryDate="2024-02-15",currentKm=12500,registrationStatus="completed",registrationNumber="MH-02-XX-1234",registrationDates={"delivered":"2024-02-15","documents_pending":"2024-02-17","submitted":"2024-02-22","completed":"2024-03-15"},registrationNotes={"completed":"MH-02-XX-1234"},services=mk_services(1050,"2024-03-20","Vikram Singh","None",5200,"2024-06-15","Rajesh Kumar","Minor brake pad adjustment",10100,"2024-10-05","Vikram Singh","Tyre rotation done"),batteryReplacement=mk_battery(True,"BC-2024-001","completed","BP-LFP-96001","BP-LFP-96001-R","2024-07-20","Arjun Patel",True),kmLog=[{"month":"2024-03","km":1200},{"month":"2024-06","km":5200},{"month":"2024-10","km":10100}],createdAt="2024-02-15T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234502",model="Comet",chassisNo="CH-2024-0002",motorNo="MT-ZF-78002",controllerNo="CT-INV-44002",batteryPackNo="BP-LFP-96002",manufacturingDate="2024-02-05",customerName="Priya Sharma",customerPhone="+91-9876543202",customerLocation="Delhi, DL",deliveryDate="2024-03-01",currentKm=8700,registrationStatus="completed",registrationNumber="DL-3C-AB-5678",registrationDates={"delivered":"2024-03-01","documents_pending":"2024-03-03","submitted":"2024-03-08","completed":"2024-04-01"},registrationNotes={"completed":"DL-3C-AB-5678"},services=mk_services(1020,"2024-04-10","Sanjay Verma","None",5100,"2024-08-15","Sanjay Verma","Software update applied"),batteryReplacement=mk_battery(True,"BC-2024-001","pending","BP-LFP-96002"),kmLog=[{"month":"2024-04","km":1100},{"month":"2024-08","km":5100}],createdAt="2024-03-01T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234503",model="Comet",chassisNo="CH-2024-0003",motorNo="MT-ZF-78003",controllerNo="CT-INV-44003",batteryPackNo="BP-LFP-96003",manufacturingDate="2024-03-12",customerName="Amit Joshi",customerPhone="+91-9876543203",customerLocation="Bengaluru, KA",deliveryDate="2024-04-10",currentKm=6200,registrationStatus="submitted",registrationNumber="",registrationDates={"delivered":"2024-04-10","documents_pending":"2024-04-12","submitted":"2024-04-18"},registrationNotes={"submitted":"Submitted to RTO Bengaluru East"},services=mk_services(950,"2024-05-20","Manoj Sharma","None",5050,"2024-09-10","Manoj Sharma","AC gas top-up"),batteryReplacement=mk_battery(),kmLog=[{"month":"2024-05","km":800},{"month":"2024-09","km":5050}],createdAt="2024-04-10T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234504",model="Cosmo",chassisNo="CH-2024-0004",motorNo="MT-ZF-78004",controllerNo="CT-INV-44004",batteryPackNo="BP-NMC-72004",manufacturingDate="2024-04-20",customerName="Sneha Kulkarni",customerPhone="+91-9876543204",customerLocation="Pune, MH",deliveryDate="2024-05-25",currentKm=3800,registrationStatus="completed",registrationNumber="MH-12-YZ-9012",registrationDates={"delivered":"2024-05-25","documents_pending":"2024-05-27","submitted":"2024-06-01","completed":"2024-06-28"},registrationNotes={"completed":"MH-12-YZ-9012"},services=mk_services(1080,"2024-07-05","Amit Yadav","None"),batteryReplacement=mk_battery(True,"BC-2024-001","in_progress","BP-NMC-72004","","","Arjun Patel"),kmLog=[{"month":"2024-07","km":1080}],createdAt="2024-05-25T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234505",model="Comet",chassisNo="CH-2024-0005",motorNo="MT-ZF-78005",controllerNo="CT-INV-44005",batteryPackNo="BP-LFP-96005",manufacturingDate="2024-05-15",customerName="Vikash Gupta",customerPhone="+91-9876543205",customerLocation="Hyderabad, TS",deliveryDate="2024-06-20",currentKm=2100,registrationStatus="documents_pending",registrationNumber="",registrationDates={"delivered":"2024-06-20","documents_pending":"2024-06-22"},registrationNotes={"documents_pending":"Waiting for address proof from customer"},services=mk_services(1050,"2024-08-10","Rajesh Kumar","None"),batteryReplacement=mk_battery(),kmLog=[{"month":"2024-08","km":1050}],createdAt="2024-06-20T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234506",model="Cosmo",chassisNo="CH-2024-0006",motorNo="MT-ZF-78006",controllerNo="CT-INV-44006",batteryPackNo="BP-NMC-72006",manufacturingDate="2024-06-01",customerName="Ananya Reddy",customerPhone="+91-9876543206",customerLocation="Chennai, TN",deliveryDate="2024-07-10",currentKm=1500,registrationStatus="completed",registrationNumber="TN-09-CD-3456",registrationDates={"delivered":"2024-07-10","documents_pending":"2024-07-12","submitted":"2024-07-18","completed":"2024-08-10"},registrationNotes={"completed":"TN-09-CD-3456"},services=mk_services(1020,"2024-09-05","Vikram Singh","None"),batteryReplacement=mk_battery(),kmLog=[{"month":"2024-09","km":1020}],createdAt="2024-07-10T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234507",model="Cosmo",chassisNo="CH-2024-0007",motorNo="MT-ZF-78007",controllerNo="CT-INV-44007",batteryPackNo="BP-LFP-96007",manufacturingDate="2024-07-01",customerName="Deepak Nair",customerPhone="+91-9876543207",customerLocation="Ahmedabad, GJ",deliveryDate="2024-08-05",currentKm=5800,registrationStatus="completed",registrationNumber="GJ-01-EF-7890",registrationDates={"delivered":"2024-08-05","documents_pending":"2024-08-07","submitted":"2024-08-12","completed":"2024-09-05"},registrationNotes={"completed":"GJ-01-EF-7890"},services=mk_services(1100,"2024-09-15","Sanjay Verma","None",5150,"2024-11-20","Sanjay Verma","Wheel alignment"),batteryReplacement=mk_battery(True,"BC-2024-001","pending","BP-LFP-96007"),kmLog=[{"month":"2024-09","km":1100},{"month":"2024-11","km":5150}],createdAt="2024-08-05T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234508",model="Cosmo",chassisNo="CH-2024-0008",motorNo="MT-ZF-78008",controllerNo="CT-INV-44008",batteryPackNo="BP-NMC-72008",manufacturingDate="2024-08-10",customerName="Kavita Singh",customerPhone="+91-9876543208",customerLocation="Jaipur, RJ",deliveryDate="2024-09-15",currentKm=4200,registrationStatus="submitted",registrationNumber="",registrationDates={"delivered":"2024-09-15","documents_pending":"2024-09-17","submitted":"2024-09-22"},registrationNotes={"submitted":"Pending RTO appointment"},services=mk_services(1050,"2024-10-20","Manoj Sharma","None"),batteryReplacement=mk_battery(),kmLog=[{"month":"2024-10","km":1050}],createdAt="2024-09-15T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234509",model="Comet",chassisNo="CH-2024-0009",motorNo="MT-ZF-78009",controllerNo="CT-INV-44009",batteryPackNo="BP-LFP-96009",manufacturingDate="2024-09-05",customerName="Rohit Deshmukh",customerPhone="+91-9876543209",customerLocation="Kolkata, WB",deliveryDate="2024-10-10",currentKm=1800,registrationStatus="delivered",registrationNumber="",registrationDates={"delivered":"2024-10-10"},registrationNotes={},services=mk_services(1050,"2024-11-25","Amit Yadav","None"),batteryReplacement=mk_battery(True,"BC-2024-002","pending","BP-LFP-96009"),kmLog=[{"month":"2024-11","km":1050}],createdAt="2024-10-10T10:00:00Z",updatedAt=now),
-                Vehicle(id=str(uuid.uuid4()),vin="MAT45678901234510",model="Comet",chassisNo="CH-2024-0010",motorNo="MT-ZF-78100",controllerNo="CT-INV-44100",batteryPackNo="BP-NMC-72100",manufacturingDate="2024-10-01",customerName="Sunita Patil",customerPhone="+91-9876543210",customerLocation="Lucknow, UP",deliveryDate="2024-11-05",currentKm=600,registrationStatus="documents_pending",registrationNumber="",registrationDates={"delivered":"2024-11-05","documents_pending":"2024-11-07"},registrationNotes={"documents_pending":"Insurance documents pending"},services=mk_services(),batteryReplacement=mk_battery(),kmLog=[],createdAt="2024-11-05T10:00:00Z",updatedAt=now),
-            ]
+            vehicles = generate_seed_vehicles(200)
             db.add_all(vehicles)
             db.commit()
-            print("Seeded 10 vehicle profiles.")
+            print("Seeded 200 vehicle profiles.")
     except Exception as e:
         db.rollback()
         print(f"init_db seeding failed: {e}")

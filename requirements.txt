@@ -7,3 +7,4 @@ passlib[bcrypt]
 python-multipart
 psycopg2-binary
 cryptography
+openpyxl

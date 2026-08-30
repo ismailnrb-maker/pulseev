@@ -388,12 +388,12 @@ const Store = (() => {
       const formData = new FormData();
       formData.append('file', file);
       
-      const isCsv = file.name.endsWith('.csv');
+      const isCsvOrXlsx = file.name.endsWith('.csv') || file.name.endsWith('.xlsx');
       const token = localStorage.getItem('ev_auth_token');
 
-      const endpoint = isCsv ? '/api/import' : '/api/import-json'; // Fallback endpoint for JSON imports if created later
+      const endpoint = isCsvOrXlsx ? '/api/import' : '/api/import-json'; // Fallback endpoint for JSON imports if created later
 
-      if (isCsv) {
+      if (isCsvOrXlsx) {
         fetch('/api/import', {
           method: 'POST',
           headers: {
@@ -405,7 +405,7 @@ const Store = (() => {
           if (res.status === 401) return handleUnauthorized();
           if (!res.ok) {
             const err = await res.json();
-            throw new Error(err.detail || 'CSV Import processing failed');
+            throw new Error(err.detail || 'Import processing failed');
           }
           const result = await res.json();
           await sync(); // Reload cache
