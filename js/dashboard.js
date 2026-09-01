@@ -10,7 +10,6 @@ const DashboardView = (() => {
     const vehicles = Store.getVehicles();
 
     // Calculate progress percentages
-    const serviceProgress = stats.totalServices > 0 ? Math.round((stats.servicesCompleted / stats.totalServices) * 100) : 0;
     const batteryProgress = stats.batteryAffected > 0 ? Math.round((stats.batteryCompleted / stats.batteryAffected) * 100) : 0;
 
     // Render HTML shell
@@ -33,17 +32,17 @@ const DashboardView = (() => {
           </div>
         </div>
 
-        <!-- Metric 2: Service Overdue -->
+        <!-- Metric 2: Vehicles affected by overdue service -->
         <div class="kpi-card" style="--kpi-color: var(--accent-rose); --kpi-bg: var(--accent-rose-bg);">
           <div class="kpi-card-header">
-            <span class="kpi-card-label">Overdue Services</span>
+            <span class="kpi-card-label">Vehicles With Overdue Service</span>
             <div class="kpi-card-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
             </div>
           </div>
-          <div class="kpi-card-value" style="color: ${stats.servicesOverdue > 0 ? 'var(--accent-rose-light)' : 'inherit'};">${stats.servicesOverdue}</div>
-          <div class="kpi-card-trend ${stats.servicesOverdue > 0 ? 'down' : 'up'}">
-            <span>Upcoming: ${stats.servicesDue} due soon</span>
+          <div class="kpi-card-value" style="color: ${stats.vehiclesWithOverdueService > 0 ? 'var(--accent-rose-light)' : 'inherit'};">${stats.vehiclesWithOverdueService}</div>
+          <div class="kpi-card-trend ${stats.vehiclesWithOverdueService > 0 ? 'down' : 'up'}">
+            <span>${stats.overdueServiceMilestones} overdue service milestones</span>
           </div>
         </div>
 
@@ -80,36 +79,36 @@ const DashboardView = (() => {
       <!-- Charts & Visual Summaries -->
       <div class="grid-2 mb-6">
         
-        <!-- Left: Service Milestones Progress -->
+        <!-- Left: Service risk and urgency -->
         <div class="card">
           <div class="card-header">
             <div>
-              <h3 class="card-title">Fleet Service Completion</h3>
-              <p class="card-subtitle">Scheduled services successfully done across the fleet</p>
+              <h3 class="card-title">Service Risk & Urgency</h3>
+              <p class="card-subtitle">Affected vehicles and the urgency of overdue work</p>
             </div>
-            <span class="badge badge-primary">${serviceProgress}% Done</span>
+            <span class="badge badge-overdue">${stats.criticalOverdueVehicles} Critical</span>
           </div>
-          <div style="display: flex; align-items: center; justify-content: space-around; padding: var(--space-4) 0; gap: var(--space-4);">
-            <div class="donut-chart" style="background: conic-gradient(var(--accent-emerald) 0% ${serviceProgress}%, var(--bg-elevated) ${serviceProgress}% 100%);">
-              <div class="donut-chart-center">
-                <span class="donut-chart-value">${stats.servicesCompleted}</span>
-                <span class="donut-chart-label">Logged</span>
-              </div>
+          <div class="grid-2" style="padding-top: var(--space-3); gap: var(--space-3);">
+            <div style="padding: var(--space-4); background: var(--accent-rose-bg); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: var(--radius-md);">
+              <div class="detail-label">Vehicles With Overdue Service</div>
+              <div class="font-bold text-rose mt-1" style="font-size: var(--text-2xl); font-family: var(--font-mono);">${stats.vehiclesWithOverdueService}</div>
             </div>
-            <div style="display: flex; flex-direction: column; gap: var(--space-2); flex: 1; max-width: 200px;">
-              <div class="flex-between">
-                <span class="text-secondary font-medium" style="font-size: var(--text-sm);">Completed</span>
-                <span class="text-emerald font-semibold" style="font-size: var(--text-sm);">${stats.servicesCompleted}</span>
-              </div>
-              <div class="flex-between">
-                <span class="text-secondary font-medium" style="font-size: var(--text-sm);">Due Soon</span>
-                <span class="text-amber font-semibold" style="font-size: var(--text-sm);">${stats.servicesDue}</span>
-              </div>
-              <div class="flex-between">
-                <span class="text-secondary font-medium" style="font-size: var(--text-sm);">Overdue</span>
-                <span class="text-rose font-semibold" style="font-size: var(--text-sm);">${stats.servicesOverdue}</span>
-              </div>
+            <div style="padding: var(--space-4); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md);">
+              <div class="detail-label">Overdue Service Milestones</div>
+              <div class="font-bold mt-1" style="font-size: var(--text-2xl); font-family: var(--font-mono);">${stats.overdueServiceMilestones}</div>
             </div>
+            <div style="padding: var(--space-4); background: var(--accent-rose-bg); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: var(--radius-md);">
+              <div class="detail-label">Critical Overdue Vehicles</div>
+              <div class="font-bold text-rose mt-1" style="font-size: var(--text-2xl); font-family: var(--font-mono);">${stats.criticalOverdueVehicles}</div>
+            </div>
+            <div style="padding: var(--space-4); background: var(--accent-amber-bg); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: var(--radius-md);">
+              <div class="detail-label">Average Delay</div>
+              <div class="font-bold text-amber mt-1" style="font-size: var(--text-2xl); font-family: var(--font-mono);">${stats.averageDelayDays} <span style="font-size: var(--text-sm);">days</span></div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-subtle);">
+            <span class="text-secondary" style="font-size: var(--text-xs);">Milestones are individual records; vehicle totals are deduplicated.</span>
+            <button class="btn btn-secondary btn-sm" onclick="App.navigateTo('services')">Review queue</button>
           </div>
         </div>
 

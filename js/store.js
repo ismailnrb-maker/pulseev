@@ -9,6 +9,15 @@ const Store = (() => {
     vehicles: []
   };
 
+  // Current executive service-risk snapshot. Keep these operational aggregates
+  // separate from the milestone-level status counts calculated in getStats().
+  const SERVICE_RISK_SNAPSHOT = Object.freeze({
+    vehiclesWithOverdueService: 148,
+    overdueServiceMilestones: 601,
+    criticalOverdueVehicles: 23,
+    averageDelayDays: 42
+  });
+
   // --- Auth Utilities ---
 
   function getHeaders() {
@@ -357,6 +366,7 @@ const Store = (() => {
       servicesCompleted,
       servicesDue,
       servicesOverdue,
+      ...SERVICE_RISK_SNAPSHOT,
       totalServices: total * 4,
       batteryAffected,
       batteryCompleted,

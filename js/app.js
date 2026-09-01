@@ -365,10 +365,10 @@ const App = (() => {
     document.getElementById('sidebar-visibility-pct').innerText = `${stats.visibilityPct}%`;
     document.getElementById('sidebar-visibility-fill').style.width = `${stats.visibilityPct}%`;
 
-    // Update Service center badge (Overdue count)
+    // Show affected vehicles here, not the larger milestone-record count.
     const overdueBadge = document.getElementById('badge-service-overdue');
-    if (stats.servicesOverdue > 0) {
-      overdueBadge.innerText = stats.servicesOverdue;
+    if (stats.vehiclesWithOverdueService > 0) {
+      overdueBadge.innerText = stats.vehiclesWithOverdueService;
       overdueBadge.style.display = 'flex';
     } else {
       overdueBadge.style.display = 'none';
