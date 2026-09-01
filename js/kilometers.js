@@ -48,7 +48,7 @@ const KilometersView = (() => {
       <!-- Service Milestones Predictions Table -->
       <div class="card mb-6">
         <h3 class="card-title mb-4">Predictive Service Forecasts</h3>
-        <p class="card-subtitle mb-4">Service calendar predictions calculated by analyzing average monthly run rates</p>
+        <p class="card-subtitle mb-4">Forecasts use the current odometer and the continuity of logged service completions</p>
         <div class="table-wrapper">
           <table class="table table-clickable">
             <thead>
@@ -71,10 +71,13 @@ const KilometersView = (() => {
                     <td>${v.model}</td>
                     <td class="mono font-semibold">${v.currentKm.toLocaleString()} KM</td>
                     <td class="mono">${forecast.monthlyRate.toLocaleString()} KM/mo</td>
-                    <td class="font-semibold text-brand">${forecast.nextService}</td>
-                    <td class="mono">${forecast.targetKm.toLocaleString()} KM</td>
+                    <td class="font-semibold ${forecast.requiresVerification ? 'text-amber' : 'text-brand'}">${forecast.nextService}</td>
+                    <td class="mono">${forecast.targetKm === null ? '—' : `${forecast.targetKm.toLocaleString()} KM`}</td>
                     <td>
-                      <span class="badge ${forecast.isOverdue ? 'badge-overdue' : 'badge-completed'}">
+                      <span class="badge ${
+                        forecast.requiresVerification ? 'badge-upcoming' :
+                        forecast.isOverdue ? 'badge-overdue' : 'badge-completed'
+                      }">
                         ${forecast.timeString}
                       </span>
                     </td>
@@ -147,25 +150,51 @@ const KilometersView = (() => {
     const months = daysSinceDelivery / 30.4;
     const monthlyRate = Math.max(200, Math.round(v.currentKm / months)); // default min 200 km/month
 
-    // Find next uncompleted service
-    let nextS = null;
-    let nextIdx = -1;
-    for (let i = 0; i < v.services.length; i++) {
-      if (!v.services[i].completedKm) {
-        nextS = v.services[i];
-        nextIdx = i;
-        break;
-      }
+    const services = Array.isArray(v.services)
+      ? [...v.services].sort((a, b) => a.dueKm - b.dueKm)
+      : [];
+
+    if (services.length === 0) {
+      return verificationRequired(monthlyRate);
     }
 
-    if (!nextS) {
+    const isCompleted = service => Number(service.completedKm) > 0;
+    const firstUncompletedIndex = services.findIndex(service => !isCompleted(service));
+
+    // A trustworthy history is sequential: once an uncompleted milestone is
+    // found, no later milestone should already be logged as completed.
+    const hasOutOfSequenceCompletion = firstUncompletedIndex >= 0 &&
+      services.slice(firstUncompletedIndex + 1).some(isCompleted);
+
+    if (hasOutOfSequenceCompletion) {
+      return verificationRequired(monthlyRate);
+    }
+
+    if (firstUncompletedIndex === -1) {
       return {
         monthlyRate,
-        nextService: 'All Done',
-        targetKm: v.services[3].dueKm,
+        nextService: 'All scheduled services logged',
+        targetKm: services[services.length - 1].dueKm,
         timeString: 'Up to Date',
-        isOverdue: false
+        isOverdue: false,
+        requiresVerification: false
       };
+    }
+
+    const nextS = services[firstUncompletedIndex];
+    const passedUncompletedMilestones = services.filter(service =>
+      !isCompleted(service) && v.currentKm > service.dueKm
+    );
+
+    // With no prior logged completion, passing the first milestone is evidence
+    // of missing history—not proof that Service #1 was missed. Multiple passed,
+    // uncompleted milestones are also too ambiguous to classify as overdue.
+    const hasPriorLoggedCompletion = firstUncompletedIndex > 0;
+    if (
+      (v.currentKm > nextS.dueKm && !hasPriorLoggedCompletion) ||
+      passedUncompletedMilestones.length > 1
+    ) {
+      return verificationRequired(monthlyRate);
     }
 
     const kmRemaining = nextS.dueKm - v.currentKm;
@@ -188,11 +217,24 @@ const KilometersView = (() => {
       nextService: `Service #${nextS.serviceNumber}`,
       targetKm: nextS.dueKm,
       timeString,
-      isOverdue
+      isOverdue,
+      requiresVerification: false
+    };
+  }
+
+  function verificationRequired(monthlyRate) {
+    return {
+      monthlyRate,
+      nextService: 'Service-history verification required',
+      targetKm: null,
+      timeString: 'Review required',
+      isOverdue: false,
+      requiresVerification: true
     };
   }
 
   return {
-    render
+    render,
+    calculateServiceForecast
   };
 })();
