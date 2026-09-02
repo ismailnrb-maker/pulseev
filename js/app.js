@@ -108,7 +108,7 @@ const App = (() => {
             if (apiErr.message !== 'server_error' && !apiErr.message.includes('fetch') && !apiErr.message.includes('timeout') && !apiErr.name?.includes('Abort')) {
               throw apiErr; // Re-throw real auth errors (401)
             }
-            // Offline fallback: accept master/master or admin/admin locally
+            // Offline fallback: accept the master account or configured pilot account locally
             if (username === 'master' && password === 'master') {
               localStorage.setItem('ev_auth_token', 'offline-token-' + Date.now());
               localStorage.setItem('ev_auth_username', 'master');
@@ -116,13 +116,13 @@ const App = (() => {
               localStorage.setItem('ev_auth_mode', 'offline');
               authSuccess = true;
               showToast(`Welcome back, master! (Offline Mode — data saved in browser)`, 'warning');
-            } else if (username === 'admin' && password === 'admin') {
+            } else if (username === 'ismailadmin' && password === 'ismailadmin') {
               localStorage.setItem('ev_auth_token', 'offline-token-' + Date.now());
-              localStorage.setItem('ev_auth_username', 'admin');
+              localStorage.setItem('ev_auth_username', 'ismailadmin');
               localStorage.setItem('ev_auth_role', 'pilot');
               localStorage.setItem('ev_auth_mode', 'offline');
               authSuccess = true;
-              showToast(`Welcome back, admin! (Offline Mode — data saved in browser)`, 'warning');
+              showToast(`Welcome back, ismailadmin! (Offline Mode — data saved in browser)`, 'warning');
             } else {
               throw new Error('Access Denied: Invalid credentials');
             }

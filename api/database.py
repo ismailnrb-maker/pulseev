@@ -365,14 +365,28 @@ def init_db():
         except Exception:
             db.rollback()
 
-        # Ensure default pilot user 'admin' exists
-        admin_user = db.query(User).filter(User.username == "admin").first()
-        if not admin_user:
+        # Replace the legacy admin/admin account with the requested pilot login.
+        db.query(User).filter(User.username == "admin").delete(synchronize_session=False)
+        ismail_admin = db.query(User).filter(User.username == "ismailadmin").first()
+        requested_password = b"ismailadmin"
+        if not ismail_admin:
             salt = bcrypt.gensalt()
-            hashed_admin = bcrypt.hashpw(b"admin", salt).decode("utf-8")
-            admin = User(username="admin", hashed_password=hashed_admin, role="pilot")
-            db.add(admin)
-            db.commit()
+            ismail_admin = User(
+                username="ismailadmin",
+                hashed_password=bcrypt.hashpw(requested_password, salt).decode("utf-8"),
+                role="pilot"
+            )
+            db.add(ismail_admin)
+        else:
+            password_matches = bcrypt.checkpw(
+                requested_password,
+                ismail_admin.hashed_password.encode("utf-8")
+            )
+            if not password_matches:
+                salt = bcrypt.gensalt()
+                ismail_admin.hashed_password = bcrypt.hashpw(requested_password, salt).decode("utf-8")
+            ismail_admin.role = "pilot"
+        db.commit()
 
         # Ensure master admin user 'master' exists and has correct role
         master_user = db.query(User).filter(User.username == "master").first()
