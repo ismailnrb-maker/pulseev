@@ -38,6 +38,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+~$*.pptx
 
 # Vercel
 .vercel/
