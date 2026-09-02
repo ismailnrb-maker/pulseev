@@ -5,7 +5,7 @@
    ============================================================ */
 
 const App = (() => {
-  let currentPage = 'dashboard';
+  let currentPage = 'action-centre';
   let activeVehicleId = null;
 
   // --- Router & Page Loading ---
@@ -54,7 +54,7 @@ const App = (() => {
         document.getElementById('login-screen').classList.remove('active');
         configureUserRoleUI();
         await Store.sync();
-        navigateTo('dashboard');
+        navigateTo('action-centre');
         showToast('Demo ready — exploring 18 synthetic EV lifecycle cases.', 'success');
         demoBtn.disabled = false;
         demoBtn.textContent = 'Explore Demo';
@@ -133,7 +133,7 @@ const App = (() => {
             configureUserRoleUI();
             await Store.sync();
             Store.startTrackingSession();
-            navigateTo('dashboard');
+            navigateTo('action-centre');
           }
         } catch (err) {
           showToast(err.message, 'error');
@@ -249,7 +249,7 @@ const App = (() => {
       const synced = await Store.sync();
       if (synced) {
         Store.startTrackingSession();
-        navigateTo('dashboard');
+        navigateTo('action-centre');
       }
     }
   }
@@ -273,7 +273,7 @@ const App = (() => {
   function navigateTo(page, vehicleId = null) {
     const role = localStorage.getItem('ev_auth_role') || 'pilot';
     if (page === 'analytics' && role !== 'master') {
-      page = 'dashboard';
+      page = 'action-centre';
     }
 
     currentPage = page;
@@ -290,7 +290,8 @@ const App = (() => {
 
     // Update Header title
     const titles = {
-      dashboard: 'Dashboard Overview',
+      'action-centre': 'AI Action Centre',
+      dashboard: 'Fleet Overview',
       vehicles: 'EV Fleet Directory',
       services: 'Service Tracker',
       battery: 'Battery Upgrade Center',
@@ -310,6 +311,9 @@ const App = (() => {
       VehicleDetailView.render(pageView, vehicleId);
     } else {
       switch (page) {
+        case 'action-centre':
+          ActionCentreView.render(pageView);
+          break;
         case 'dashboard':
           DashboardView.render(pageView);
           break;
@@ -451,6 +455,9 @@ const App = (() => {
       document.getElementById('form-delivery-date').value = v.deliveryDate || '';
       document.getElementById('form-current-km').value = v.currentKm || 0;
       document.getElementById('form-reg-number').value = v.registrationNumber || '';
+      document.getElementById('form-warranty-expiry').value = v.warrantyExpiryDate || '';
+      document.getElementById('form-issue-code').value = v.issueCode || '';
+      document.getElementById('form-issue-reported').value = v.issueReportedDate || '';
     } else {
       titleEl.innerText = 'Register New EV Profile';
       document.getElementById('form-vehicle-id').value = '';
@@ -475,7 +482,10 @@ const App = (() => {
       customerLocation: document.getElementById('form-cust-loc').value.trim(),
       deliveryDate: document.getElementById('form-delivery-date').value,
       currentKm: parseInt(document.getElementById('form-current-km').value || 0),
-      registrationNumber: document.getElementById('form-reg-number').value.trim()
+      registrationNumber: document.getElementById('form-reg-number').value.trim(),
+      warrantyExpiryDate: document.getElementById('form-warranty-expiry').value,
+      issueCode: document.getElementById('form-issue-code').value.trim().toUpperCase(),
+      issueReportedDate: document.getElementById('form-issue-reported').value
     };
 
     try {

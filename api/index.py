@@ -11,8 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from api.database import get_db, init_db, User, Vehicle
+from api.database import get_db, init_db, User, Vehicle, ActionCase, ActionAuditEvent, ServiceCampaign
 from api.auth import hash_password, verify_password, create_access_token, get_current_user
+from api.action_centre import draft_whatsapp, enrich_action_centre, iso_now, serialize_case, sync_cases
 
 # Initialize app
 app = FastAPI(title="PulseEV API", docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -51,7 +52,7 @@ def health():
     return {"status": "ok", "db_type": db_type, "db_url_prefix": masked, "db_status": db_status}
 
 # --- Schemas ---
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class LoginRequest(BaseModel):
     username: str
@@ -60,6 +61,15 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str
     password: str
+
+
+class ActionRequest(BaseModel):
+    type: str
+    payload: dict = Field(default_factory=dict)
+
+
+class EnrichRequest(BaseModel):
+    force: bool = False
 
 
 def validate_vehicle_identity(payload: dict, partial: bool = False):
@@ -188,6 +198,10 @@ def create_vehicle(
         customerPhone=payload.get("customerPhone", ""),
         customerLocation=payload.get("customerLocation", ""),
         deliveryDate=payload.get("deliveryDate", ""),
+        warrantyExpiryDate=payload.get("warrantyExpiryDate", ""),
+        contactHistory=payload.get("contactHistory") or [],
+        issueCode=payload.get("issueCode", ""),
+        issueReportedDate=payload.get("issueReportedDate", ""),
         currentKm=payload.get("currentKm", 0),
         registrationStatus=payload.get("registrationStatus", "delivered"),
         registrationNumber=payload.get("registrationNumber", ""),
@@ -228,6 +242,10 @@ def update_vehicle(
     v.customerPhone = payload.get("customerPhone", v.customerPhone)
     v.customerLocation = payload.get("customerLocation", v.customerLocation)
     v.deliveryDate = payload.get("deliveryDate", v.deliveryDate)
+    v.warrantyExpiryDate = payload.get("warrantyExpiryDate", v.warrantyExpiryDate)
+    v.contactHistory = payload.get("contactHistory", v.contactHistory)
+    v.issueCode = payload.get("issueCode", v.issueCode)
+    v.issueReportedDate = payload.get("issueReportedDate", v.issueReportedDate)
     
     v.currentKm = payload.get("currentKm", v.currentKm)
     v.registrationStatus = payload.get("registrationStatus", v.registrationStatus)
@@ -336,8 +354,17 @@ async def import_csv(
             "newSerial": vehicle_row.get("batteryReplacementNewSerial", ""),
             "replacementDate": vehicle_row.get("batteryReplacementDate", ""),
             "technician": vehicle_row.get("batteryReplacementTechnician", ""),
-            "customerConfirmed": confirmed
+            "customerConfirmed": confirmed,
+            "reportedAt": vehicle_row.get("issueReportedDate", "")
         }
+
+        last_contact = vehicle_row.get("lastCustomerContactDate", "")
+        contact_history = [{
+            "date": last_contact,
+            "channel": "import",
+            "outcome": vehicle_row.get("lastCustomerContactOutcome", "connected") or "connected",
+            "note": "Imported latest customer contact",
+        }] if last_contact else []
 
         reg_status = vehicle_row.get("registrationStatus", "delivered")
         reg_number = vehicle_row.get("registrationNumber", "")
@@ -358,6 +385,10 @@ async def import_csv(
             existing.customerPhone = vehicle_row.get("customerPhone") or existing.customerPhone
             existing.customerLocation = vehicle_row.get("customerLocation") or existing.customerLocation
             existing.deliveryDate = del_date
+            existing.warrantyExpiryDate = vehicle_row.get("warrantyExpiryDate") or existing.warrantyExpiryDate
+            existing.contactHistory = contact_history or existing.contactHistory
+            existing.issueCode = vehicle_row.get("issueCode") or existing.issueCode
+            existing.issueReportedDate = vehicle_row.get("issueReportedDate") or existing.issueReportedDate
 
             if current_km != existing.currentKm:
                 existing.currentKm = current_km
@@ -400,6 +431,10 @@ async def import_csv(
                 customerPhone=vehicle_row.get("customerPhone", ""),
                 customerLocation=vehicle_row.get("customerLocation", ""),
                 deliveryDate=del_date,
+                warrantyExpiryDate=vehicle_row.get("warrantyExpiryDate", ""),
+                contactHistory=contact_history,
+                issueCode=vehicle_row.get("issueCode", ""),
+                issueReportedDate=vehicle_row.get("issueReportedDate", ""),
                 currentKm=current_km,
                 kmLog=[{"month": del_date[:7], "km": current_km}] if current_km > 0 else [],
                 registrationStatus=reg_status,
@@ -424,6 +459,175 @@ async def import_csv(
 
     db.commit()
     return {"type": "csv", "added": added, "updated": updated}
+
+
+# --- AI Action Centre Routes ---
+
+def action_centre_payload(db: Session):
+    vehicles = db.query(Vehicle).all()
+    cases = sync_cases(db, vehicles)
+    vehicle_map = {vehicle.id: vehicle for vehicle in vehicles}
+    active_cases = db.query(ActionCase).filter(ActionCase.status.notin_(["resolved", "auto_closed"])).all()
+    counts = {priority: sum(case.priority == priority for case in active_cases) for priority in ("critical", "high", "medium")}
+    now = iso_now()
+    recent_events = db.query(ActionAuditEvent).order_by(ActionAuditEvent.createdAt.desc()).limit(12).all()
+    return {
+        "cases": [serialize_case(case, vehicle_map) for case in cases],
+        "summary": {
+            **counts,
+            "active": len(active_cases),
+            "overdueSla": sum(case.slaDeadline < now for case in active_cases),
+        },
+        "audit": [{"id":event.id, "caseId":event.caseId, "actor":event.actor, "eventType":event.eventType, "details":event.details or {}, "createdAt":event.createdAt} for event in recent_events],
+        "generatedAt": now,
+        "engineVersion": "action-centre-v1",
+    }
+
+
+@app.get("/api/action-centre")
+def get_action_centre(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    return action_centre_payload(db)
+
+
+@app.post("/api/action-centre/enrich")
+def enrich_action_queue(
+    request: EnrichRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    vehicles = db.query(Vehicle).all()
+    cases = sync_cases(db, vehicles)
+    enrichment = enrich_action_centre(db, cases, force=request.force)
+    payload = action_centre_payload(db)
+    payload["brief"] = enrichment["brief"]
+    payload["briefSource"] = enrichment["source"]
+    payload["queueFingerprint"] = enrichment["queueFingerprint"]
+    return payload
+
+
+@app.post("/api/action-cases/{case_id}/draft-whatsapp")
+def create_whatsapp_draft(
+    case_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    case = db.query(ActionCase).filter(ActionCase.id == case_id).first()
+    if not case or not case.vehicleIds:
+        raise HTTPException(status_code=404, detail="Action case not found")
+    vehicle = db.query(Vehicle).filter(Vehicle.id == case.vehicleIds[0]).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Affected vehicle not found")
+    return draft_whatsapp(case, vehicle)
+
+
+def add_action_audit(db, case, actor, event_type, details):
+    db.add(ActionAuditEvent(
+        id=str(uuid.uuid4()), caseId=case.id, actor=actor,
+        eventType=event_type, details=details, createdAt=iso_now()
+    ))
+
+
+@app.post("/api/action-cases/{case_id}/actions")
+def perform_case_action(
+    case_id: str,
+    request: ActionRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user.get("role") != "master" and current_user.get("sub") != "ismailadmin":
+        raise HTTPException(status_code=403, detail="Only ismailadmin or master may approve operational actions")
+    case = db.query(ActionCase).filter(ActionCase.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Action case not found")
+    if case.status in ("resolved", "auto_closed"):
+        raise HTTPException(status_code=409, detail="This case is already closed")
+
+    action_type = request.type
+    payload = request.payload or {}
+    actor = current_user.get("sub", "unknown")
+    now = iso_now()
+    linked_vehicles = db.query(Vehicle).filter(Vehicle.id.in_(case.vehicleIds or [])).all()
+
+    if action_type == "assign_technician":
+        owner = str(payload.get("owner", "")).strip()
+        if not owner:
+            raise HTTPException(status_code=400, detail="Select a technician")
+        case.assignedOwner = owner
+        case.status = "assigned"
+        case.assignedAt = now
+        case.actionedAt = now
+        for vehicle in linked_vehicles:
+            if case.caseType == "battery_recall":
+                battery = dict(vehicle.batteryReplacement or {})
+                battery["technician"] = owner
+                vehicle.batteryReplacement = battery
+        details = {"owner": owner}
+
+    elif action_type == "create_campaign":
+        name = str(payload.get("name", "")).strip()
+        region = str(payload.get("region", "")).strip()
+        owner = str(payload.get("owner", "")).strip()
+        if not all((name, region, owner)):
+            raise HTTPException(status_code=400, detail="Campaign name, region and owner are required")
+        campaign = ServiceCampaign(
+            id=f"SC-{uuid.uuid4().hex[:12].upper()}",
+            name=name, region=region,
+            issueCode=next((vehicle.issueCode for vehicle in linked_vehicles if vehicle.issueCode), case.caseType),
+            vehicleIds=[vehicle.id for vehicle in linked_vehicles], owner=owner,
+            status="planned", createdAt=now,
+        )
+        db.add(campaign)
+        case.assignedOwner = owner
+        case.status = "in_progress"
+        case.assignedAt = case.assignedAt or now
+        case.actionedAt = now
+        details = {"campaignId": campaign.id, "name": name, "region": region, "owner": owner, "vehicleCount": len(linked_vehicles)}
+
+    elif action_type == "escalate":
+        owner = str(payload.get("owner", "")).strip()
+        note = str(payload.get("note", "")).strip()
+        if not owner or not note:
+            raise HTTPException(status_code=400, detail="Escalation owner and note are required")
+        case.assignedOwner = owner
+        case.status = "escalated"
+        case.assignedAt = case.assignedAt or now
+        case.actionedAt = now
+        details = {"owner": owner, "note": note}
+
+    elif action_type == "resolve":
+        note = str(payload.get("note", "")).strip()
+        if not note:
+            raise HTTPException(status_code=400, detail="A resolution note is required")
+        case.status = "resolved"
+        case.actionedAt = now
+        case.resolvedAt = now
+        details = {"note": note}
+
+    elif action_type == "log_contact":
+        vehicle_id = str(payload.get("vehicleId", "")).strip()
+        vehicle = next((item for item in linked_vehicles if item.id == vehicle_id), None)
+        if not vehicle:
+            raise HTTPException(status_code=400, detail="Select an affected vehicle")
+        outcome = str(payload.get("outcome", "opened")).strip()
+        channel = str(payload.get("channel", "whatsapp")).strip()
+        contacts = list(vehicle.contactHistory or [])
+        contacts.append({"date":datetime.date.today().isoformat(), "channel":channel, "outcome":outcome, "note":str(payload.get("note", "")).strip()})
+        vehicle.contactHistory = contacts
+        if case.status == "open":
+            case.status = "in_progress"
+        case.actionedAt = now
+        details = {"vehicleId":vehicle_id, "channel":channel, "outcome":outcome}
+
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported action type")
+
+    case.updatedAt = now
+    add_action_audit(db, case, actor, action_type, details)
+    db.commit()
+    return action_centre_payload(db)
 
 # --- Session Tracking Routes ---
 from api.database import SessionLog

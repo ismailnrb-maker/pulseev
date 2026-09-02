@@ -9,15 +9,6 @@ const Store = (() => {
     vehicles: []
   };
 
-  // Current executive service-risk snapshot. Keep these operational aggregates
-  // separate from the milestone-level status counts calculated in getStats().
-  const SERVICE_RISK_SNAPSHOT = Object.freeze({
-    vehiclesWithOverdueService: 2,
-    overdueServiceMilestones: 2,
-    criticalOverdueVehicles: 1,
-    averageDelayDays: 38
-  });
-
   // --- Auth Utilities ---
 
   function getHeaders() {
@@ -52,7 +43,7 @@ const Store = (() => {
       ['Ananya Bose','+91 98765 41006','Kolkata, WB','CT2','2026-03-20',7800,'completed'],
       ['Karan Malhotra','+91 98765 41007','Delhi, DL','CO1','2026-03-02',6400,'completed'],
       ['Meera Iyer','+91 98765 41008','Chennai, TN','CT2','2025-12-11',12000,'completed'],
-      ['Rahul Verma','+91 98765 41009','Jaipur, RJ','CO1','2026-06-22',1350,'documents_pending'],
+      ['Rahul Verma','+91 98765 41009','Jaipur, RJ','CO1','2026-06-22',1350,'submitted'],
       ['Ishita Rao','+91 98765 41010','Lucknow, UP','CT2','2026-02-26',10800,'completed'],
       ['Aditya Singh','+91 98765 41011','Mumbai, MH','CO1','2026-05-09',5200,'completed'],
       ['Kavya Menon','+91 98765 41012','Bengaluru, KA','CT2','2026-01-29',9200,'completed'],
@@ -71,7 +62,9 @@ const Store = (() => {
       let completedCount = milestones.filter(due => currentKm >= due).length;
       if (n === 3) completedCount = 2;
       if ([6, 7].includes(n)) completedCount = 0;
-      if ([8, 15].includes(n)) completedCount = 1;
+      if (n === 8) completedCount = 2;
+      if (n === 15) completedCount = 1;
+      if (n === 10) completedCount = 2;
       const services = milestones.map((dueKm, i) => {
         const completed = i < completedCount || (n === 7 && i === 1);
         return {serviceNumber:i + 1, dueKm, completedKm:completed ? dueKm + 40 + n * 7 : 0, date:completed ? `2026-${String(Math.min(8, i + 3)).padStart(2, '0')}-${String(Math.min(27, n + 5)).padStart(2, '0')}` : '', technician:completed ? ['Manoj Sharma','Amit Yadav','Vikram Singh'][n % 3] : '', issues:completed ? 'Routine inspection completed' : ''};
@@ -82,7 +75,12 @@ const Store = (() => {
       const manufactured = new Date(`${deliveryDate}T00:00:00Z`);
       manufactured.setUTCDate(manufactured.getUTCDate() - 18);
       const manufacturingDate = manufactured.toISOString().slice(0, 10);
-      return {id:`demo-${String(n).padStart(2, '0')}`, vin, model, chassisNo:vin, motorNo:`MTR-26-${String(n).padStart(5, '0')}`, controllerNo:`CTRL-26-${String(n).padStart(5, '0')}`, batteryPackNo, manufacturingDate, customerName, customerPhone, customerLocation, deliveryDate, currentKm, registrationStatus, registrationNumber:registrationStatus === 'completed' ? `DEMO-EV-${4100+n}` : '', registrationDates:{delivered:deliveryDate}, registrationNotes:{}, services, batteryReplacement:{affected, campaignId:affected ? 'BC-2026-01' : '', status:batteryStatus, oldSerial:affected ? batteryPackNo : '', newSerial:batteryStatus === 'completed' ? `${batteryPackNo}-R` : '', replacementDate:batteryStatus === 'completed' ? '2026-08-12' : '', technician:['in_progress','completed'].includes(batteryStatus) ? 'Arjun Patel' : '', customerConfirmed:batteryStatus === 'completed'}, kmLog:[{month:deliveryDate.slice(0,7),km:0},{month:'2026-08',km:currentKm}], createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()};
+      const today = new Date();
+      const isoOffset = days => new Date(today.getTime() + days * 86400000).toISOString().slice(0, 10);
+      const issueCode = [1,3,11].includes(n) ? 'BMS_CELL_IMBALANCE' : (n === 10 ? 'BATTERY_RECALL' : '');
+      const registrationDates = {delivered:deliveryDate};
+      if (registrationStatus === 'documents_pending') registrationDates.documents_pending = n === 14 ? isoOffset(-40) : deliveryDate;
+      return {id:`demo-${String(n).padStart(2, '0')}`, vin, model, chassisNo:vin, motorNo:`MTR-26-${String(n).padStart(5, '0')}`, controllerNo:`CTRL-26-${String(n).padStart(5, '0')}`, batteryPackNo, manufacturingDate, customerName, customerPhone, customerLocation, deliveryDate, warrantyExpiryDate:n === 10 ? isoOffset(30) : new Date(new Date(`${deliveryDate}T00:00:00Z`).getTime() + 730 * 86400000).toISOString().slice(0,10), contactHistory:[{date:isoOffset(n === 10 ? -9 : -3),channel:'phone',outcome:n === 10 ? 'no_answer' : 'connected',note:'Lifecycle follow-up'}], issueCode, issueReportedDate:issueCode ? isoOffset(n === 10 ? -18 : -12) : '', currentKm, registrationStatus, registrationNumber:registrationStatus === 'completed' ? `DEMO-EV-${4100+n}` : '', registrationDates, registrationNotes:{}, services, batteryReplacement:{affected, campaignId:affected ? 'BC-2026-01' : '', status:batteryStatus, oldSerial:affected ? batteryPackNo : '', newSerial:batteryStatus === 'completed' ? `${batteryPackNo}-R` : '', replacementDate:batteryStatus === 'completed' ? '2026-08-12' : '', technician:['in_progress','completed'].includes(batteryStatus) ? 'Arjun Patel' : '', customerConfirmed:batteryStatus === 'completed', reportedAt:affected ? isoOffset(n === 10 ? -18 : -12) : ''}, kmLog:[{month:deliveryDate.slice(0,7),km:0},{month:new Date().toISOString().slice(0,7),km:currentKm}], createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()};
     });
   }
 
@@ -396,16 +394,30 @@ const Store = (() => {
     let servicesCompleted = 0;
     let servicesDue = 0;
     let servicesOverdue = 0;
+    const overdueVehicleRows = [];
     vehicles.forEach(v => {
       if (v.services && Array.isArray(v.services)) {
+        const overdueMilestones = [];
         v.services.forEach((s, i) => {
           const status = getServiceStatus(v, i);
           if (status === 'completed') servicesCompleted++;
           else if (status === 'upcoming') servicesDue++;
-          else if (status === 'overdue') servicesOverdue++;
+          else if (status === 'overdue') { servicesOverdue++; overdueMilestones.push(s); }
         });
+        if (overdueMilestones.length) {
+          const delivery = new Date(`${v.deliveryDate}T00:00:00Z`);
+          const activeDays = Math.max(1, Math.floor((Date.now() - delivery.getTime()) / 86400000));
+          const dailyUsage = Number(v.currentKm || 0) / activeDays;
+          const furthestKm = Math.max(...overdueMilestones.map(s => Number(v.currentKm || 0) - Number(s.dueKm || 0)));
+          overdueVehicleRows.push({ overdueCount:overdueMilestones.length, delayDays:dailyUsage > 0 ? Math.round(furthestKm / dailyUsage) : 0 });
+        }
       }
     });
+    const vehiclesWithOverdueService = overdueVehicleRows.length;
+    const criticalOverdueVehicles = overdueVehicleRows.filter(row => row.overdueCount >= 2).length;
+    const averageDelayDays = vehiclesWithOverdueService
+      ? Math.round(overdueVehicleRows.reduce((sum,row) => sum + row.delayDays, 0) / vehiclesWithOverdueService)
+      : 0;
 
     // Battery stats
     const batteryAffected = vehicles.filter(v => v.batteryReplacement?.affected).length;
@@ -429,7 +441,10 @@ const Store = (() => {
       servicesCompleted,
       servicesDue,
       servicesOverdue,
-      ...SERVICE_RISK_SNAPSHOT,
+      vehiclesWithOverdueService,
+      overdueServiceMilestones: servicesOverdue,
+      criticalOverdueVehicles,
+      averageDelayDays,
       totalServices: total * 4,
       batteryAffected,
       batteryCompleted,
@@ -440,6 +455,54 @@ const Store = (() => {
       regCompleted,
       visibilityPct
     };
+  }
+
+  // --- AI Action Centre ---
+
+  async function getActionCentre() {
+    if (isOfflineMode()) return ActionCentreEngine.getPayload(cache.vehicles);
+    const res = await fetch('/api/action-centre', { headers: getHeaders() });
+    if (res.status === 401) return handleUnauthorized();
+    if (!res.ok) throw new Error('Failed to load the Action Centre');
+    return await res.json();
+  }
+
+  async function enrichActionCentre(force = false) {
+    if (isOfflineMode()) return ActionCentreEngine.enrich(cache.vehicles);
+    const res = await fetch('/api/action-centre/enrich', {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ force })
+    });
+    if (res.status === 401) return handleUnauthorized();
+    if (!res.ok) throw new Error('Failed to refresh the management brief');
+    return await res.json();
+  }
+
+  async function draftWhatsapp(caseId) {
+    if (isOfflineMode()) return ActionCentreEngine.draftWhatsapp(cache.vehicles, caseId);
+    const res = await fetch(`/api/action-cases/${caseId}/draft-whatsapp`, {
+      method: 'POST', headers: getHeaders()
+    });
+    if (res.status === 401) return handleUnauthorized();
+    if (!res.ok) throw new Error('Failed to draft the WhatsApp message');
+    return await res.json();
+  }
+
+  async function performCaseAction(caseId, type, payload = {}) {
+    assertWritable();
+    if (isOfflineMode()) {
+      const result = ActionCentreEngine.performAction(cache.vehicles, caseId, type, payload);
+      saveOfflineVehicles(cache.vehicles);
+      return result;
+    }
+    const res = await fetch(`/api/action-cases/${caseId}/actions`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ type, payload })
+    });
+    if (res.status === 401) return handleUnauthorized();
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Action could not be completed');
+    }
+    return await res.json();
   }
 
   // --- Import / Export ---
@@ -642,6 +705,10 @@ const Store = (() => {
     updateRegistration,
     updateKm,
     getStats,
+    getActionCentre,
+    enrichActionCentre,
+    draftWhatsapp,
+    performCaseAction,
     exportData,
     importData,
     downloadCsvTemplate,

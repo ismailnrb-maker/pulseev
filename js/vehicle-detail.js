@@ -128,6 +128,20 @@ const VehicleDetailView = (() => {
           </div>
         </div>
 
+        <div class="card mt-6">
+          <div class="card-header">
+            <div><h3 class="card-title">Lifecycle Signals & Customer Contact</h3><p class="card-subtitle">Evidence used by the Action Centre risk engine</p></div>
+            <button class="btn btn-secondary btn-sm" onclick="VehicleDetailView.logContact('${v.id}')">Log Contact</button>
+          </div>
+          <div class="detail-grid mb-4">
+            <div class="detail-item"><span class="detail-label">Warranty Expiry</span><span class="detail-value">${v.warrantyExpiryDate || 'Not recorded'}</span></div>
+            <div class="detail-item"><span class="detail-label">Active Issue Code</span><span class="detail-value mono">${v.issueCode || 'None'}</span></div>
+            <div class="detail-item"><span class="detail-label">Issue Reported</span><span class="detail-value">${v.issueReportedDate || 'Not recorded'}</span></div>
+            <div class="detail-item"><span class="detail-label">Contact Attempts</span><span class="detail-value">${(v.contactHistory || []).length}</span></div>
+          </div>
+          <div class="audit-list">${(v.contactHistory || []).slice().reverse().map(item => `<div class="audit-item"><span class="audit-dot"></span><div><strong>${(item.channel || 'contact').toUpperCase()} · ${(item.outcome || 'logged').replace('_',' ')}</strong><p>${item.date || 'Unknown date'}${item.note ? ` · ${item.note}` : ''}</p></div></div>`).join('') || '<p class="text-muted">No customer contact recorded.</p>'}</div>
+        </div>
+
         <!-- Odometer Updates -->
         <div class="card mt-6">
           <h3 class="card-title mb-4">Kilometer Intelligence</h3>
@@ -432,6 +446,24 @@ const VehicleDetailView = (() => {
     App.refreshApp();
   }
 
+  async function logContact(vehicleId) {
+    const vehicle = Store.getVehicle(vehicleId);
+    const outcome = prompt('Contact outcome (connected, no_answer, message_sent):', 'connected');
+    if (!outcome) return;
+    const note = prompt('Contact note:', 'Lifecycle follow-up');
+    const contactHistory = [...(vehicle.contactHistory || []), {
+      date: new Date().toISOString().slice(0, 10), channel: 'phone',
+      outcome: outcome.trim().toLowerCase().replace(/\s+/g, '_'), note: (note || '').trim()
+    }];
+    try {
+      await Store.updateVehicle(vehicleId, { contactHistory });
+      App.showToast('Customer contact added to the lifecycle record.', 'success');
+      App.refreshApp();
+    } catch (error) {
+      App.showToast(error.message, 'error');
+    }
+  }
+
   function advanceRegistration(vehicleId) {
     const v = Store.getVehicle(vehicleId);
     const notesInput = document.getElementById('detail-reg-notes');
@@ -502,6 +534,7 @@ const VehicleDetailView = (() => {
     render,
     switchTab,
     updateOdo,
+    logContact,
     advanceRegistration,
     toggleCampaignTarget,
     completeBatteryUpgrade

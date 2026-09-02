@@ -16,13 +16,15 @@ _raw_url = (
 
 if _raw_url:
     # Normalize to psycopg2 driver — psycopg2 handles sslmode=require natively
-    if _raw_url.startswith("postgres://"):
+    if _raw_url.startswith("sqlite:"):
+        DATABASE_URL = _raw_url
+    elif _raw_url.startswith("postgres://"):
         DATABASE_URL = _raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
     elif _raw_url.startswith("postgresql://") and "+psycopg2" not in _raw_url:
         DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     else:
         DATABASE_URL = _raw_url
-    IS_POSTGRES = True
+    IS_POSTGRES = not _raw_url.startswith("sqlite:")
 else:
     DATABASE_URL = "sqlite:////tmp/pulseev.db"
     IS_POSTGRES = False
@@ -90,6 +92,10 @@ class Vehicle(Base):
     customerPhone = Column(String(30), nullable=False)
     customerLocation = Column(String(100), nullable=False)
     deliveryDate = Column(String(10), nullable=False)
+    warrantyExpiryDate = Column(String(10), nullable=True)
+    contactHistory = Column(JSON, default=list)
+    issueCode = Column(String(80), nullable=True)
+    issueReportedDate = Column(String(10), nullable=True)
 
     # Metrics and Workflow
     currentKm = Column(Integer, default=0)
@@ -107,6 +113,63 @@ class Vehicle(Base):
     updatedAt = Column(String(30), nullable=False)
 
 
+class ActionCase(Base):
+    __tablename__ = "action_cases"
+    id = Column(String(50), primary_key=True)
+    caseKey = Column(String(180), unique=True, index=True, nullable=False)
+    caseType = Column(String(50), nullable=False)
+    priority = Column(String(20), nullable=False)
+    riskScore = Column(Integer, nullable=False)
+    category = Column(String(50), nullable=False)
+    vehicleIds = Column(JSON, default=list)
+    evidence = Column(JSON, default=list)
+    reason = Column(String(1000), nullable=False)
+    recommendation = Column(String(500), nullable=False)
+    assignedOwner = Column(String(100), default="Unassigned", nullable=False)
+    slaDeadline = Column(String(30), nullable=False)
+    status = Column(String(30), default="open", nullable=False)
+    evidenceFingerprint = Column(String(64), nullable=False)
+    explanation = Column(String(1200), nullable=True)
+    explanationSource = Column(String(30), default="rules", nullable=False)
+    detectedAt = Column(String(30), nullable=False)
+    assignedAt = Column(String(30), nullable=True)
+    actionedAt = Column(String(30), nullable=True)
+    createdAt = Column(String(30), nullable=False)
+    updatedAt = Column(String(30), nullable=False)
+    resolvedAt = Column(String(30), nullable=True)
+
+
+class ActionAuditEvent(Base):
+    __tablename__ = "action_audit_events"
+    id = Column(String(50), primary_key=True)
+    caseId = Column(String(50), index=True, nullable=False)
+    actor = Column(String(100), nullable=False)
+    eventType = Column(String(50), nullable=False)
+    details = Column(JSON, default=dict)
+    createdAt = Column(String(30), nullable=False)
+
+
+class ServiceCampaign(Base):
+    __tablename__ = "service_campaigns"
+    id = Column(String(50), primary_key=True)
+    name = Column(String(160), nullable=False)
+    region = Column(String(80), nullable=False)
+    issueCode = Column(String(80), nullable=False)
+    vehicleIds = Column(JSON, default=list)
+    owner = Column(String(100), nullable=False)
+    status = Column(String(30), default="planned", nullable=False)
+    createdAt = Column(String(30), nullable=False)
+
+
+class ActionBrief(Base):
+    __tablename__ = "action_briefs"
+    id = Column(String(50), primary_key=True)
+    queueFingerprint = Column(String(64), unique=True, index=True, nullable=False)
+    text = Column(String(2000), nullable=False)
+    source = Column(String(30), default="rules", nullable=False)
+    generatedAt = Column(String(30), nullable=False)
+
+
 def generate_curated_demo_vehicles():
     """Create a small, deterministic pitch fleet with deliberate lifecycle cases."""
     profiles = [
@@ -118,7 +181,7 @@ def generate_curated_demo_vehicles():
         ("Ananya Bose", "+91 98765 41006", "Kolkata, WB", "CT2", "2026-03-20", 7800, "completed"),
         ("Karan Malhotra", "+91 98765 41007", "Delhi, DL", "CO1", "2026-03-02", 6400, "completed"),
         ("Meera Iyer", "+91 98765 41008", "Chennai, TN", "CT2", "2025-12-11", 12000, "completed"),
-        ("Rahul Verma", "+91 98765 41009", "Jaipur, RJ", "CO1", "2026-06-22", 1350, "documents_pending"),
+        ("Rahul Verma", "+91 98765 41009", "Jaipur, RJ", "CO1", "2026-06-22", 1350, "submitted"),
         ("Ishita Rao", "+91 98765 41010", "Lucknow, UP", "CT2", "2026-02-26", 10800, "completed"),
         ("Aditya Singh", "+91 98765 41011", "Mumbai, MH", "CO1", "2026-05-09", 5200, "completed"),
         ("Kavya Menon", "+91 98765 41012", "Bengaluru, KA", "CT2", "2026-01-29", 9200, "completed"),
@@ -139,7 +202,9 @@ def generate_curated_demo_vehicles():
         completed_count = sum(km >= due for due in milestones)
         if i == 3: completed_count = 2
         if i in (6, 7): completed_count = 0
-        if i in (8, 15): completed_count = 1
+        if i == 8: completed_count = 2
+        if i == 15: completed_count = 1
+        if i == 10: completed_count = 2
         services = []
         for service_no, due_km in enumerate(milestones, 1):
             completed = service_no <= completed_count or (i == 7 and service_no == 2)
@@ -148,7 +213,12 @@ def generate_curated_demo_vehicles():
         battery_status = {10:"pending", 11:"in_progress", 12:"completed"}.get(i, "not_affected")
         battery_serial = f"BP-{'LFP96' if model == 'CT2' else 'NMC72'}-{i:04d}"
         reg_number = f"{prefixes[location]}-EV-{4100+i}" if reg_status == "completed" else ""
-        vehicles.append(Vehicle(id=f"demo-{i:02d}", vin=vin, model=model, chassisNo=vin, motorNo=f"MTR-26-{i:05d}", controllerNo=f"CTRL-26-{i:05d}", batteryPackNo=battery_serial, manufacturingDate=(datetime.date.fromisoformat(delivery) - datetime.timedelta(days=18)).isoformat(), customerName=name, customerPhone=phone, customerLocation=location, deliveryDate=delivery, currentKm=km, registrationStatus=reg_status, registrationNumber=reg_number, registrationDates={"delivered":delivery, reg_status:delivery}, registrationNotes={"completed":reg_number} if reg_number else {}, services=services, batteryReplacement={"affected":affected, "campaignId":"BC-2026-01" if affected else "", "status":battery_status, "oldSerial":battery_serial if affected else "", "newSerial":f"{battery_serial}-R" if battery_status == "completed" else "", "replacementDate":"2026-08-12" if battery_status == "completed" else "", "technician":"Arjun Patel" if battery_status in ("in_progress", "completed") else "", "customerConfirmed":battery_status == "completed"}, kmLog=[{"month":delivery[:7], "km":0}, {"month":"2026-08", "km":km}], createdAt=now_str, updatedAt=now_str))
+        today = datetime.date.today()
+        warranty_expiry = today + datetime.timedelta(days=30) if i == 10 else datetime.date.fromisoformat(delivery) + datetime.timedelta(days=730)
+        contact_date = today - datetime.timedelta(days=9 if i == 10 else 3)
+        issue_code = "BMS_CELL_IMBALANCE" if i in (1, 3, 11) else ("BATTERY_RECALL" if i == 10 else "")
+        issue_reported = today - datetime.timedelta(days=18 if i == 10 else 12)
+        vehicles.append(Vehicle(id=f"demo-{i:02d}", vin=vin, model=model, chassisNo=vin, motorNo=f"MTR-26-{i:05d}", controllerNo=f"CTRL-26-{i:05d}", batteryPackNo=battery_serial, manufacturingDate=(datetime.date.fromisoformat(delivery) - datetime.timedelta(days=18)).isoformat(), customerName=name, customerPhone=phone, customerLocation=location, deliveryDate=delivery, warrantyExpiryDate=warranty_expiry.isoformat(), contactHistory=[{"date":contact_date.isoformat(), "channel":"phone", "outcome":"no_answer", "note":"Routine follow-up"}], issueCode=issue_code, issueReportedDate=issue_reported.isoformat() if issue_code else "", currentKm=km, registrationStatus=reg_status, registrationNumber=reg_number, registrationDates={"delivered":delivery, reg_status:delivery}, registrationNotes={"completed":reg_number} if reg_number else {}, services=services, batteryReplacement={"affected":affected, "campaignId":"BC-2026-01" if affected else "", "status":battery_status, "oldSerial":battery_serial if affected else "", "newSerial":f"{battery_serial}-R" if battery_status == "completed" else "", "replacementDate":"2026-08-12" if battery_status == "completed" else "", "technician":"Arjun Patel" if battery_status in ("in_progress", "completed") else "", "customerConfirmed":battery_status == "completed", "reportedAt":issue_reported.isoformat() if affected else ""}, kmLog=[{"month":delivery[:7], "km":0}, {"month":"2026-08", "km":km}], createdAt=now_str, updatedAt=now_str))
     return vehicles
 
 
@@ -348,6 +418,110 @@ def generate_seed_vehicles(count=200):
     return vehicles
 
 
+def install_vehicle_signal_columns(db):
+    """Idempotent compatibility migration for SQLite and PostgreSQL deployments."""
+    from sqlalchemy import text
+    statements = [
+        'ALTER TABLE vehicles ADD COLUMN "warrantyExpiryDate" VARCHAR(10)',
+        'ALTER TABLE vehicles ADD COLUMN "contactHistory" JSON',
+        'ALTER TABLE vehicles ADD COLUMN "issueCode" VARCHAR(80)',
+        'ALTER TABLE vehicles ADD COLUMN "issueReportedDate" VARCHAR(10)',
+    ]
+    for statement in statements:
+        try:
+            db.execute(text(statement))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
+def install_action_case_timestamp_columns(db):
+    """Add explicit lifecycle timestamps to existing Action Centre tables."""
+    from sqlalchemy import text
+    statements = [
+        'ALTER TABLE action_cases ADD COLUMN "detectedAt" VARCHAR(30)',
+        'ALTER TABLE action_cases ADD COLUMN "assignedAt" VARCHAR(30)',
+        'ALTER TABLE action_cases ADD COLUMN "actionedAt" VARCHAR(30)',
+    ]
+    for statement in statements:
+        try:
+            db.execute(text(statement))
+            db.commit()
+        except Exception:
+            db.rollback()
+    try:
+        db.execute(text('UPDATE action_cases SET "detectedAt" = "createdAt" WHERE "detectedAt" IS NULL'))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def backfill_action_centre_demo_signals(db):
+    """Keep the curated pitch fleet rich enough to demonstrate each rule."""
+    today = datetime.date.today()
+    demo_vehicles = {
+        vehicle.id: vehicle
+        for vehicle in db.query(Vehicle).filter(Vehicle.id.like("demo-%")).all()
+    }
+    for vehicle in demo_vehicles.values():
+        if not vehicle.warrantyExpiryDate:
+            vehicle.warrantyExpiryDate = (datetime.date.fromisoformat(vehicle.deliveryDate) + datetime.timedelta(days=730)).isoformat()
+        if not vehicle.contactHistory:
+            vehicle.contactHistory = [{
+                "date": (today - datetime.timedelta(days=3)).isoformat(),
+                "channel": "phone",
+                "outcome": "connected",
+                "note": "Routine lifecycle check-in",
+            }]
+
+    recall_vehicle = demo_vehicles.get("demo-10")
+    if recall_vehicle:
+        recall_vehicle.warrantyExpiryDate = (today + datetime.timedelta(days=30)).isoformat()
+        recall_vehicle.contactHistory = [{
+            "date": (today - datetime.timedelta(days=9)).isoformat(),
+            "channel": "phone",
+            "outcome": "no_answer",
+            "note": "Recall appointment follow-up",
+        }]
+        recall_vehicle.issueCode = "BATTERY_RECALL"
+        recall_vehicle.issueReportedDate = (today - datetime.timedelta(days=18)).isoformat()
+        battery = dict(recall_vehicle.batteryReplacement or {})
+        battery["reportedAt"] = recall_vehicle.issueReportedDate
+        recall_vehicle.batteryReplacement = battery
+        services = [dict(service) for service in (recall_vehicle.services or [])]
+        if len(services) > 2:
+            services[2].update({"completedKm": 0, "date": "", "technician": ""})
+            recall_vehicle.services = services
+
+    for vehicle_id in ("demo-01", "demo-03", "demo-11"):
+        vehicle = demo_vehicles.get(vehicle_id)
+        if vehicle:
+            vehicle.issueCode = "BMS_CELL_IMBALANCE"
+            vehicle.issueReportedDate = (today - datetime.timedelta(days=12)).isoformat()
+
+    registration_vehicle = demo_vehicles.get("demo-14")
+    if registration_vehicle:
+        dates = dict(registration_vehicle.registrationDates or {})
+        dates["documents_pending"] = (today - datetime.timedelta(days=40)).isoformat()
+        registration_vehicle.registrationDates = dates
+
+    prior_registration_example = demo_vehicles.get("demo-09")
+    if prior_registration_example and prior_registration_example.registrationStatus == "documents_pending":
+        prior_registration_example.registrationStatus = "submitted"
+        dates = dict(prior_registration_example.registrationDates or {})
+        dates["submitted"] = today.isoformat()
+        prior_registration_example.registrationDates = dates
+
+    service_balance = demo_vehicles.get("demo-08")
+    if service_balance:
+        services = [dict(service) for service in (service_balance.services or [])]
+        for index in range(min(2, len(services))):
+            if not services[index].get("completedKm"):
+                services[index].update({"completedKm": int(services[index].get("dueKm") or 0) + 96, "date": today.isoformat(), "technician":"Amit Yadav", "issues":"Routine inspection completed"})
+        service_balance.services = services
+    db.commit()
+
+
 def init_db():
     try:
         Base.metadata.create_all(bind=engine)
@@ -357,6 +531,9 @@ def init_db():
 
     db = SessionLocal()
     try:
+        install_vehicle_signal_columns(db)
+        install_action_case_timestamp_columns(db)
+
         # Schema migration fallback for existing deployments
         from sqlalchemy import text
         try:
@@ -415,6 +592,7 @@ def init_db():
                 db.add(AppSetting(key="demo_dataset_version", value=dataset_version))
             db.commit()
             print("Installed curated 18-vehicle pitch dataset.")
+        backfill_action_centre_demo_signals(db)
     except Exception as e:
         db.rollback()
         print(f"init_db seeding failed: {e}")

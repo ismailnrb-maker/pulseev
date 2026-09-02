@@ -8,3 +8,4 @@ python-multipart
 psycopg2-binary
 cryptography
 openpyxl
+openai>=1.0.0

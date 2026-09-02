@@ -1,0 +1,33 @@
+{
+  "now": "2026-09-02T06:00:00Z",
+  "vehicles": [
+    {
+      "id":"recall", "vin":"MPEV26CT2A0000001", "model":"CT2", "customerName":"Customer One", "customerPhone":"+91 90000 00001", "customerLocation":"Mumbai, MH", "deliveryDate":"2026-01-01", "warrantyExpiryDate":"2026-10-02", "contactHistory":[{"date":"2026-08-24","outcome":"no_answer"}], "issueCode":"BATTERY_RECALL", "issueReportedDate":"2026-08-15", "currentKm":10800, "registrationStatus":"completed", "registrationDates":{"completed":"2026-01-10"}, "services":[{"dueKm":1000,"completedKm":1050},{"dueKm":5000,"completedKm":5050},{"dueKm":10000,"completedKm":0},{"dueKm":20000,"completedKm":0}], "batteryReplacement":{"affected":true,"status":"pending","reportedAt":"2026-08-15"}, "kmLog":[{"month":"2026-01","km":0},{"month":"2026-09","km":10800}]
+    },
+    {
+      "id":"registration", "vin":"MPEV26CO1A0000002", "model":"CO1", "customerName":"Customer Two", "customerPhone":"+91 90000 00002", "customerLocation":"Delhi, DL", "deliveryDate":"2026-07-01", "warrantyExpiryDate":null, "contactHistory":[], "issueCode":"", "issueReportedDate":"", "currentKm":300, "registrationStatus":"documents_pending", "registrationDates":{"documents_pending":"2026-07-24"}, "services":[], "batteryReplacement":{}, "kmLog":[]
+    },
+    {
+      "id":"overdue", "vin":"MPEV26CT2A0000003", "model":"CT2", "customerName":"Customer Three", "customerPhone":"+91 90000 00003", "customerLocation":"Chennai, TN", "deliveryDate":"2026-01-01", "warrantyExpiryDate":null, "contactHistory":[], "issueCode":"", "issueReportedDate":"", "currentKm":11500, "registrationStatus":"completed", "registrationDates":{}, "services":[{"dueKm":1000,"completedKm":0},{"dueKm":5000,"completedKm":0},{"dueKm":10000,"completedKm":0},{"dueKm":20000,"completedKm":0}], "batteryReplacement":{}, "kmLog":[]
+    },
+    {
+      "id":"forecast", "vin":"MPEV26CO1A0000004", "model":"CO1", "customerName":"Customer Four", "customerPhone":"+91 90000 00004", "customerLocation":"Kolkata, WB", "deliveryDate":"2026-06-01", "warrantyExpiryDate":null, "contactHistory":[], "issueCode":"", "issueReportedDate":"", "currentKm":4600, "registrationStatus":"completed", "registrationDates":{}, "services":[{"dueKm":1000,"completedKm":1000},{"dueKm":5000,"completedKm":0}], "batteryReplacement":{}, "kmLog":[{"month":"2026-07","km":3600},{"month":"2026-08","km":4600}]
+    },
+    {
+      "id":"cluster-1", "vin":"MPEV26CT2A0000005", "model":"CT2", "customerName":"Customer Five", "customerPhone":"+91 90000 00005", "customerLocation":"Mumbai, MH", "deliveryDate":"2026-01-01", "warrantyExpiryDate":null, "contactHistory":[], "issueCode":"BMS_CELL_IMBALANCE", "issueReportedDate":"2026-08-20", "currentKm":0, "registrationStatus":"completed", "registrationDates":{}, "services":[], "batteryReplacement":{}, "kmLog":[]
+    },
+    {
+      "id":"cluster-2", "vin":"MPEV26CT2A0000006", "model":"CT2", "customerName":"Customer Six", "customerPhone":"+91 90000 00006", "customerLocation":"Pune, MH", "deliveryDate":"2026-01-01", "warrantyExpiryDate":null, "contactHistory":[], "issueCode":"BMS_CELL_IMBALANCE", "issueReportedDate":"2026-08-20", "currentKm":0, "registrationStatus":"completed", "registrationDates":{}, "services":[], "batteryReplacement":{}, "kmLog":[]
+    },
+    {
+      "id":"cluster-3", "vin":"MPEV26CT2A0000007", "model":"CT2", "customerName":"Customer Seven", "customerPhone":"+91 90000 00007", "customerLocation":"Mumbai, MH", "deliveryDate":"2026-01-01", "warrantyExpiryDate":null, "contactHistory":[], "issueCode":"BMS_CELL_IMBALANCE", "issueReportedDate":"2026-08-20", "currentKm":0, "registrationStatus":"completed", "registrationDates":{}, "services":[], "batteryReplacement":{}, "kmLog":[]
+    }
+  ],
+  "expected": {
+    "battery_recall": 92,
+    "regional_pattern": 88,
+    "registration_delay": 73,
+    "multiple_services": 84,
+    "service_forecast": 54
+  }
+}

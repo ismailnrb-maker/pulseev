@@ -69,6 +69,9 @@ def generate_vehicles_data(count=18):
             
         mfg_date_str = mfg_date.isoformat()
         del_date_str = del_date.isoformat()
+        warranty_expiry = del_date + datetime.timedelta(days=730)
+        last_contact = datetime.date(2026, 8, 30) - datetime.timedelta(days=random.randint(1, 20))
+        contact_outcome = random.choice(['connected', 'no_answer', 'message_sent'])
         
         # Calculate months active
         months_active = (datetime.date(2026, 8, 30) - del_date).days // 30
@@ -185,6 +188,15 @@ def generate_vehicles_data(count=18):
             "technician": technician,
             "customerConfirmed": cust_conf
         }
+
+        issue_code = ''
+        issue_reported_date = ''
+        if i in (0, 2, 10):
+            issue_code = 'BMS_CELL_IMBALANCE'
+            issue_reported_date = (datetime.date(2026, 8, 30) - datetime.timedelta(days=12)).isoformat()
+        elif i == 9:
+            issue_code = 'BATTERY_RECALL'
+            issue_reported_date = (datetime.date(2026, 8, 30) - datetime.timedelta(days=18)).isoformat()
         
         chassis_no = f"CH-{del_date.year}-{i+1:03d}"
         motor_no = f"MT-ZF-78{i+1:03d}"
@@ -202,6 +214,11 @@ def generate_vehicles_data(count=18):
             "customerPhone": cust_phone,
             "customerLocation": location,
             "deliveryDate": del_date_str,
+            "warrantyExpiryDate": warranty_expiry.isoformat(),
+            "lastCustomerContactDate": last_contact.isoformat(),
+            "lastCustomerContactOutcome": contact_outcome,
+            "issueCode": issue_code,
+            "issueReportedDate": issue_reported_date,
             "currentKm": current_km,
             "registrationStatus": reg_status,
             "registrationNumber": reg_number,
@@ -286,6 +303,11 @@ def create_excel_template():
         ("customerPhone", "YES", "Phone pattern (e.g. +91 98765 43210)", "Contact mobile/WhatsApp number."),
         ("customerLocation", "YES", "City, State (e.g. Mumbai, MH)", "Delivery region / operational city location."),
         ("deliveryDate", "YES", "YYYY-MM-DD (Date)", "Date of vehicle handover to customer."),
+        ("warrantyExpiryDate", "NO", "YYYY-MM-DD (Date)", "Vehicle warranty expiry date used by lifecycle risk rules."),
+        ("lastCustomerContactDate", "NO", "YYYY-MM-DD (Date)", "Date of the most recent customer contact attempt."),
+        ("lastCustomerContactOutcome", "NO", "connected / no_answer / message_sent", "Outcome of the most recent customer contact."),
+        ("issueCode", "NO", "Short issue code", "Active battery or service issue code used for pattern detection."),
+        ("issueReportedDate", "NO", "YYYY-MM-DD (Date)", "Date the active issue was first reported."),
         ("currentKm", "NO", "Positive integer (e.g. 1500)", "Current odometer reading in kilometers (Defaults to 0)."),
         ("registrationStatus", "NO", "delivered / documents_pending / submitted / completed", "Current status of RTO registration."),
         ("registrationNumber", "NO", "Registration plate string (e.g. MH-02-XX-1234)", "Assigned RTO vehicle registration plate number."),
@@ -340,7 +362,8 @@ def create_excel_template():
     headers = [
         "vin", "model", "motorNo", "controllerNo", "batteryPackNo",
         "manufacturingDate", "customerName", "customerPhone", "customerLocation",
-        "deliveryDate", "currentKm", "registrationStatus", "registrationNumber",
+        "deliveryDate", "warrantyExpiryDate", "lastCustomerContactDate", "lastCustomerContactOutcome",
+        "issueCode", "issueReportedDate", "currentKm", "registrationStatus", "registrationNumber",
         "batteryReplacementAffected", "batteryReplacementCampaignId", "batteryReplacementStatus",
         "batteryReplacementOldSerial", "batteryReplacementNewSerial", "batteryReplacementDate",
         "batteryReplacementTechnician", "batteryReplacementCustomerConfirmed"
@@ -375,6 +398,11 @@ def create_excel_template():
             v["customerPhone"],
             v["customerLocation"],
             v["deliveryDate"],
+            v["warrantyExpiryDate"],
+            v["lastCustomerContactDate"],
+            v["lastCustomerContactOutcome"],
+            v["issueCode"],
+            v["issueReportedDate"],
             v["currentKm"],
             v["registrationStatus"],
             v["registrationNumber"],
@@ -418,20 +446,26 @@ def create_excel_template():
     dv_reg.prompt = 'Select registration stage'
     dv_reg.promptTitle = 'Select Status'
     ws_tpl.add_data_validation(dv_reg)
-    dv_reg.add("L2:L300")
+    dv_reg.add("Q2:Q300")
+
+    dv_contact = DataValidation(type="list", formula1='"connected,no_answer,message_sent"', allow_blank=True)
+    dv_contact.error = 'Must choose connected, no_answer, or message_sent'
+    dv_contact.errorTitle = 'Invalid Contact Outcome'
+    ws_tpl.add_data_validation(dv_contact)
+    dv_contact.add("M2:M300")
 
     dv_bat_status = DataValidation(type="list", formula1='"not_affected,pending,in_progress,completed"', allow_blank=True)
     dv_bat_status.error = 'Must choose not_affected, pending, in_progress, or completed'
     dv_bat_status.errorTitle = 'Invalid Upgrade Status'
     ws_tpl.add_data_validation(dv_bat_status)
-    dv_bat_status.add("P2:P300")
+    dv_bat_status.add("U2:U300")
 
     dv_bool = DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=True)
     dv_bool.error = 'Must enter TRUE or FALSE'
     dv_bool.errorTitle = 'Invalid Boolean Value'
     ws_tpl.add_data_validation(dv_bool)
-    dv_bool.add("N2:N300")
-    dv_bool.add("U2:U300")
+    dv_bool.add("S2:S300")
+    dv_bool.add("Z2:Z300")
 
     wb.save("ev_lifecycle_template.xlsx")
     print("Excel template 'ev_lifecycle_template.xlsx' (with 18 demo records) created successfully.")
@@ -440,7 +474,8 @@ def create_csv_template():
     headers = [
         "vin", "model", "motorNo", "controllerNo", "batteryPackNo",
         "manufacturingDate", "customerName", "customerPhone", "customerLocation",
-        "deliveryDate", "currentKm", "registrationStatus", "registrationNumber",
+        "deliveryDate", "warrantyExpiryDate", "lastCustomerContactDate", "lastCustomerContactOutcome",
+        "issueCode", "issueReportedDate", "currentKm", "registrationStatus", "registrationNumber",
         "batteryReplacementAffected", "batteryReplacementCampaignId", "batteryReplacementStatus",
         "batteryReplacementOldSerial", "batteryReplacementNewSerial", "batteryReplacementDate",
         "batteryReplacementTechnician", "batteryReplacementCustomerConfirmed"
@@ -465,6 +500,11 @@ def create_csv_template():
                 v["customerPhone"],
                 v["customerLocation"],
                 v["deliveryDate"],
+                v["warrantyExpiryDate"],
+                v["lastCustomerContactDate"],
+                v["lastCustomerContactOutcome"],
+                v["issueCode"],
+                v["issueReportedDate"],
                 v["currentKm"],
                 v["registrationStatus"],
                 v["registrationNumber"],
