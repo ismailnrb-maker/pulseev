@@ -59,6 +59,11 @@
           style="margin-top: var(--space-2); height: 40px; font-size: var(--text-sm); font-weight: 600; width: 100%;">Access
           Database</button>
       </form>
+      <div style="display: flex; align-items: center; gap: var(--space-3); margin: var(--space-5) 0 var(--space-4); color: var(--text-muted); font-size: var(--text-xs);">
+        <span style="height: 1px; background: var(--border); flex: 1;"></span><span>or</span><span style="height: 1px; background: var(--border); flex: 1;"></span>
+      </div>
+      <button type="button" class="btn btn-secondary w-100" id="btn-explore-demo" style="height: 42px; width: 100%; font-weight: 700;">Explore Demo</button>
+      <p style="text-align: center; margin-top: var(--space-3); color: var(--text-muted); font-size: var(--text-xs); line-height: 1.5;">No credentials required · Synthetic data · Read-only</p>
     </div>
   </div>
 
@@ -261,6 +266,7 @@
         </button>
         <input type="file" id="import-file-input" class="hidden" accept=".json,.csv,.xlsx">
 
+        <span class="badge badge-primary hidden" id="demo-mode-badge">Demo · Synthetic Data · Read-only</span>
         <button class="btn btn-primary" id="btn-header-add-vehicle">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
             stroke-linecap="round" stroke-linejoin="round">
@@ -308,14 +314,14 @@
             <div class="form-group">
               <label class="form-label" for="form-vin">VIN / Chassis Number<span
                   class="required">*</span></label>
-              <input type="text" id="form-vin" class="form-input mono" placeholder="17-digit VIN" required>
+              <input type="text" id="form-vin" class="form-input mono" placeholder="17-character VIN" minlength="17" maxlength="17" pattern="[A-HJ-NPR-Z0-9]{17}" title="Enter a valid 17-character VIN (letters I, O and Q are not used)" required>
             </div>
             <div class="form-group">
               <label class="form-label" for="form-model">Model / Spec Variant<span class="required">*</span></label>
               <select id="form-model" class="form-select" required>
                 <option value="" disabled selected>Select Spec</option>
-                <option value="Comet">Comet</option>
-                <option value="Cosmo">Cosmo</option>
+                <option value="CT2">CT2</option>
+                <option value="CO1">CO1</option>
               </select>
             </div>
           </div>
@@ -348,12 +354,12 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="form-cust-name">Customer Full Name<span class="required">*</span></label>
-              <input type="text" id="form-cust-name" class="form-input" placeholder="Rahul Sharma" required>
+              <input type="text" id="form-cust-name" class="form-input" placeholder="Rahul Sharma" minlength="5" pattern=".*\s+.*" title="Enter the customer's full name" required>
             </div>
             <div class="form-group">
               <label class="form-label" for="form-cust-phone">Contact Number (WhatsApp)<span
                   class="required">*</span></label>
-              <input type="tel" id="form-cust-phone" class="form-input" placeholder="+91-XXXXX-XXXXX" required>
+              <input type="tel" id="form-cust-phone" class="form-input" placeholder="+91 98765 43210" pattern="\+91 [6-9][0-9]{4} [0-9]{5}" title="Use the format +91 98765 43210" required>
             </div>
           </div>
           <div class="form-row">

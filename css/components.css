@@ -1159,3 +1159,17 @@
   margin-bottom: var(--space-4);
 }
 
+/* Public evaluator demo: retain navigation while removing mutation controls. */
+body.demo-read-only #btn-header-add-vehicle,
+body.demo-read-only #btn-trigger-import,
+body.demo-read-only button[onclick*="openVehicleFormModal"],
+body.demo-read-only button[onclick*="openServiceLogModal"],
+body.demo-read-only button[onclick*="launchBulkCampaign"],
+body.demo-read-only button[onclick*="updateOdo"],
+body.demo-read-only button[onclick*="advanceRegistration"],
+body.demo-read-only button[onclick*="toggleCampaignTarget"],
+body.demo-read-only button[onclick*="completeBatteryUpgrade"],
+body.demo-read-only button[onclick*="confirmDelete"],
+body.demo-read-only select[onchange*="moveStage"] {
+  display: none !important;
+}

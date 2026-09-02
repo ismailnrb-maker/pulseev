@@ -31,10 +31,33 @@ const App = (() => {
         localStorage.removeItem('ev_auth_token');
         localStorage.removeItem('ev_auth_username');
         localStorage.removeItem('ev_auth_role');
+        localStorage.removeItem('ev_auth_mode');
+        localStorage.removeItem('ev_demo_read_only');
         sessionStorage.removeItem('ev_tracking_session_id');
         Store.clearAll();
         document.getElementById('login-screen').classList.add('active');
         showToast('You have signed out successfully.', 'info');
+      });
+    }
+
+    const demoBtn = document.getElementById('btn-explore-demo');
+    if (demoBtn) {
+      demoBtn.addEventListener('click', async () => {
+        demoBtn.disabled = true;
+        demoBtn.textContent = 'Preparing demo...';
+        localStorage.setItem('ev_auth_token', 'demo-token');
+        localStorage.setItem('ev_auth_username', 'Demo Viewer');
+        localStorage.setItem('ev_auth_role', 'pilot');
+        localStorage.setItem('ev_auth_mode', 'offline');
+        localStorage.setItem('ev_demo_read_only', 'true');
+        localStorage.removeItem('ev_offline_vehicles');
+        document.getElementById('login-screen').classList.remove('active');
+        configureUserRoleUI();
+        await Store.sync();
+        navigateTo('dashboard');
+        showToast('Demo ready — exploring 18 synthetic EV lifecycle cases.', 'success');
+        demoBtn.disabled = false;
+        demoBtn.textContent = 'Explore Demo';
       });
     }
 
@@ -43,6 +66,7 @@ const App = (() => {
     if (loginForm) {
       loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        localStorage.removeItem('ev_demo_read_only');
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
 
@@ -70,6 +94,7 @@ const App = (() => {
               localStorage.setItem('ev_auth_username', auth.username);
               localStorage.setItem('ev_auth_role', auth.role || 'pilot');
               localStorage.setItem('ev_auth_mode', 'api');
+              localStorage.removeItem('ev_demo_read_only');
               authSuccess = true;
               showToast(`Welcome back, ${auth.username}! (Live Database)`, 'success');
             } else if (res.status === 401) {
@@ -239,6 +264,10 @@ const App = (() => {
         analyticsNav.classList.add('hidden');
       }
     }
+    const demoMode = localStorage.getItem('ev_demo_read_only') === 'true';
+    document.body.classList.toggle('demo-read-only', demoMode);
+    const demoBadge = document.getElementById('demo-mode-badge');
+    if (demoBadge) demoBadge.classList.toggle('hidden', !demoMode);
   }
 
   function navigateTo(page, vehicleId = null) {

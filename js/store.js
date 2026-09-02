@@ -12,10 +12,10 @@ const Store = (() => {
   // Current executive service-risk snapshot. Keep these operational aggregates
   // separate from the milestone-level status counts calculated in getStats().
   const SERVICE_RISK_SNAPSHOT = Object.freeze({
-    vehiclesWithOverdueService: 148,
-    overdueServiceMilestones: 601,
-    criticalOverdueVehicles: 23,
-    averageDelayDays: 42
+    vehiclesWithOverdueService: 2,
+    overdueServiceMilestones: 2,
+    criticalOverdueVehicles: 1,
+    averageDelayDays: 38
   });
 
   // --- Auth Utilities ---
@@ -34,9 +34,61 @@ const Store = (() => {
     document.getElementById('login-screen').classList.add('active');
   }
 
+  function assertWritable() {
+    if (localStorage.getItem('ev_demo_read_only') === 'true') {
+      throw new Error('Demo mode is read-only. Sign in to make changes.');
+    }
+  }
+
   // --- Seed Data (offline fallback) ---
 
+  function getCuratedOfflineData() {
+    const profiles = [
+      ['Arjun Mehta','+91 98765 41001','Mumbai, MH','CT2','2025-10-18',24500,'completed'],
+      ['Priya Nair','+91 98765 41002','Bengaluru, KA','CT2','2026-01-12',15800,'completed'],
+      ['Rohan Kulkarni','+91 98765 41003','Pune, MH','CO1','2026-02-08',11250,'completed'],
+      ['Sneha Reddy','+91 98765 41004','Hyderabad, TS','CT2','2026-04-15',4700,'completed'],
+      ['Vikram Shah','+91 98765 41005','Ahmedabad, GJ','CO1','2026-08-10',650,'submitted'],
+      ['Ananya Bose','+91 98765 41006','Kolkata, WB','CT2','2026-03-20',7800,'completed'],
+      ['Karan Malhotra','+91 98765 41007','Delhi, DL','CO1','2026-03-02',6400,'completed'],
+      ['Meera Iyer','+91 98765 41008','Chennai, TN','CT2','2025-12-11',12000,'completed'],
+      ['Rahul Verma','+91 98765 41009','Jaipur, RJ','CO1','2026-06-22',1350,'documents_pending'],
+      ['Ishita Rao','+91 98765 41010','Lucknow, UP','CT2','2026-02-26',10800,'completed'],
+      ['Aditya Singh','+91 98765 41011','Mumbai, MH','CO1','2026-05-09',5200,'completed'],
+      ['Kavya Menon','+91 98765 41012','Bengaluru, KA','CT2','2026-01-29',9200,'completed'],
+      ['Nikhil Desai','+91 98765 41013','Pune, MH','CT2','2026-08-25',180,'delivered'],
+      ['Saanvi Gupta','+91 98765 41014','Delhi, DL','CO1','2026-08-16',420,'documents_pending'],
+      ['Dev Patel','+91 98765 41015','Ahmedabad, GJ','CT2','2026-03-18',6200,'submitted'],
+      ['Neha Joshi','+91 98765 41016','Hyderabad, TS','CO1','2026-07-04',980,'completed'],
+      ['Aarav Kapoor','+91 98765 41017','Chennai, TN','CT2','2026-06-05',2100,'completed'],
+      ['Diya Sharma','+91 98765 41018','Jaipur, RJ','CO1','2026-08-28',95,'delivered']
+    ];
+    const milestones = [1000, 5000, 10000, 20000];
+    return profiles.map((p, index) => {
+      const [customerName, customerPhone, customerLocation, model, deliveryDate, currentKm, registrationStatus] = p;
+      const n = index + 1;
+      const vin = `MPEV26${model === 'CO1' ? 'C01' : model}A${String(n).padStart(7, '0')}`;
+      let completedCount = milestones.filter(due => currentKm >= due).length;
+      if (n === 3) completedCount = 2;
+      if ([6, 7].includes(n)) completedCount = 0;
+      if ([8, 15].includes(n)) completedCount = 1;
+      const services = milestones.map((dueKm, i) => {
+        const completed = i < completedCount || (n === 7 && i === 1);
+        return {serviceNumber:i + 1, dueKm, completedKm:completed ? dueKm + 40 + n * 7 : 0, date:completed ? `2026-${String(Math.min(8, i + 3)).padStart(2, '0')}-${String(Math.min(27, n + 5)).padStart(2, '0')}` : '', technician:completed ? ['Manoj Sharma','Amit Yadav','Vikram Singh'][n % 3] : '', issues:completed ? 'Routine inspection completed' : ''};
+      });
+      const affected = [10, 11, 12].includes(n);
+      const batteryStatus = ({10:'pending', 11:'in_progress', 12:'completed'})[n] || 'not_affected';
+      const batteryPackNo = `BP-${model === 'CT2' ? 'LFP96' : 'NMC72'}-${String(n).padStart(4, '0')}`;
+      const manufactured = new Date(`${deliveryDate}T00:00:00Z`);
+      manufactured.setUTCDate(manufactured.getUTCDate() - 18);
+      const manufacturingDate = manufactured.toISOString().slice(0, 10);
+      return {id:`demo-${String(n).padStart(2, '0')}`, vin, model, chassisNo:vin, motorNo:`MTR-26-${String(n).padStart(5, '0')}`, controllerNo:`CTRL-26-${String(n).padStart(5, '0')}`, batteryPackNo, manufacturingDate, customerName, customerPhone, customerLocation, deliveryDate, currentKm, registrationStatus, registrationNumber:registrationStatus === 'completed' ? `DEMO-EV-${4100+n}` : '', registrationDates:{delivered:deliveryDate}, registrationNotes:{}, services, batteryReplacement:{affected, campaignId:affected ? 'BC-2026-01' : '', status:batteryStatus, oldSerial:affected ? batteryPackNo : '', newSerial:batteryStatus === 'completed' ? `${batteryPackNo}-R` : '', replacementDate:batteryStatus === 'completed' ? '2026-08-12' : '', technician:['in_progress','completed'].includes(batteryStatus) ? 'Arjun Patel' : '', customerConfirmed:batteryStatus === 'completed'}, kmLog:[{month:deliveryDate.slice(0,7),km:0},{month:'2026-08',km:currentKm}], createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()};
+    });
+  }
+
   function getSeedData() {
+    return getCuratedOfflineData();
+    /* Legacy seed retained below for migration compatibility. */
     const now = new Date().toISOString();
     function mkServices(c1=0,d1='',t1='',i1='', c2=0,d2='',t2='',i2='', c3=0,d3='',t3='',i3='', c4=0,d4='',t4='',i4='') {
       return [
@@ -50,16 +102,16 @@ const Store = (() => {
       return {affected,campaignId,status,oldSerial,newSerial,replacementDate,technician,customerConfirmed};
     }
     return [
-      {id:'seed-01',vin:'MAT45678901234501',model:'Comet',chassisNo:'CH-2024-0001',motorNo:'MT-ZF-78001',controllerNo:'CT-INV-44001',batteryPackNo:'BP-LFP-96001',manufacturingDate:'2024-01-10',customerName:'Rajesh Mehra',customerPhone:'+91-9876543201',customerLocation:'Mumbai, MH',deliveryDate:'2024-02-15',currentKm:12500,registrationStatus:'completed',registrationNumber:'MH-02-XX-1234',registrationDates:{delivered:'2024-02-15',documents_pending:'2024-02-17',submitted:'2024-02-22',completed:'2024-03-15'},registrationNotes:{completed:'MH-02-XX-1234'},services:mkServices(1050,'2024-03-20','Vikram Singh','None',5200,'2024-06-15','Rajesh Kumar','Minor brake pad adjustment',10100,'2024-10-05','Vikram Singh','Tyre rotation done'),batteryReplacement:mkBattery(true,'BC-2024-001','completed','BP-LFP-96001','BP-LFP-96001-R','2024-07-20','Arjun Patel',true),kmLog:[{month:'2024-03',km:1200},{month:'2024-06',km:5200},{month:'2024-10',km:10100}],createdAt:'2024-02-15T10:00:00Z',updatedAt:now},
-      {id:'seed-02',vin:'MAT45678901234502',model:'Comet',chassisNo:'CH-2024-0002',motorNo:'MT-ZF-78002',controllerNo:'CT-INV-44002',batteryPackNo:'BP-LFP-96002',manufacturingDate:'2024-02-05',customerName:'Priya Sharma',customerPhone:'+91-9876543202',customerLocation:'Delhi, DL',deliveryDate:'2024-03-01',currentKm:8700,registrationStatus:'completed',registrationNumber:'DL-3C-AB-5678',registrationDates:{delivered:'2024-03-01',documents_pending:'2024-03-03',submitted:'2024-03-08',completed:'2024-04-01'},registrationNotes:{completed:'DL-3C-AB-5678'},services:mkServices(1020,'2024-04-10','Sanjay Verma','None',5100,'2024-08-15','Sanjay Verma','Software update applied'),batteryReplacement:mkBattery(true,'BC-2024-001','pending','BP-LFP-96002'),kmLog:[{month:'2024-04',km:1100},{month:'2024-08',km:5100}],createdAt:'2024-03-01T10:00:00Z',updatedAt:now},
-      {id:'seed-03',vin:'MAT45678901234503',model:'Comet',chassisNo:'CH-2024-0003',motorNo:'MT-ZF-78003',controllerNo:'CT-INV-44003',batteryPackNo:'BP-LFP-96003',manufacturingDate:'2024-03-12',customerName:'Amit Joshi',customerPhone:'+91-9876543203',customerLocation:'Bengaluru, KA',deliveryDate:'2024-04-10',currentKm:6200,registrationStatus:'submitted',registrationNumber:'',registrationDates:{delivered:'2024-04-10',documents_pending:'2024-04-12',submitted:'2024-04-18'},registrationNotes:{submitted:'Submitted to RTO Bengaluru East'},services:mkServices(950,'2024-05-20','Manoj Sharma','None',5050,'2024-09-10','Manoj Sharma','AC gas top-up'),batteryReplacement:mkBattery(),kmLog:[{month:'2024-05',km:800},{month:'2024-09',km:5050}],createdAt:'2024-04-10T10:00:00Z',updatedAt:now},
-      {id:'seed-04',vin:'MAT45678901234504',model:'Cosmo',chassisNo:'CH-2024-0004',motorNo:'MT-ZF-78004',controllerNo:'CT-INV-44004',batteryPackNo:'BP-NMC-72004',manufacturingDate:'2024-04-20',customerName:'Sneha Kulkarni',customerPhone:'+91-9876543204',customerLocation:'Pune, MH',deliveryDate:'2024-05-25',currentKm:3800,registrationStatus:'completed',registrationNumber:'MH-12-YZ-9012',registrationDates:{delivered:'2024-05-25',documents_pending:'2024-05-27',submitted:'2024-06-01',completed:'2024-06-28'},registrationNotes:{completed:'MH-12-YZ-9012'},services:mkServices(1080,'2024-07-05','Amit Yadav','None'),batteryReplacement:mkBattery(true,'BC-2024-001','in_progress','BP-NMC-72004','','','Arjun Patel'),kmLog:[{month:'2024-07',km:1080}],createdAt:'2024-05-25T10:00:00Z',updatedAt:now},
-      {id:'seed-05',vin:'MAT45678901234505',model:'Comet',chassisNo:'CH-2024-0005',motorNo:'MT-ZF-78005',controllerNo:'CT-INV-44005',batteryPackNo:'BP-LFP-96005',manufacturingDate:'2024-05-15',customerName:'Vikash Gupta',customerPhone:'+91-9876543205',customerLocation:'Hyderabad, TS',deliveryDate:'2024-06-20',currentKm:2100,registrationStatus:'documents_pending',registrationNumber:'',registrationDates:{delivered:'2024-06-20',documents_pending:'2024-06-22'},registrationNotes:{documents_pending:'Waiting for address proof from customer'},services:mkServices(1050,'2024-08-10','Rajesh Kumar','None'),batteryReplacement:mkBattery(),kmLog:[{month:'2024-08',km:1050}],createdAt:'2024-06-20T10:00:00Z',updatedAt:now},
-      {id:'seed-06',vin:'MAT45678901234506',model:'Cosmo',chassisNo:'CH-2024-0006',motorNo:'MT-ZF-78006',controllerNo:'CT-INV-44006',batteryPackNo:'BP-NMC-72006',manufacturingDate:'2024-06-01',customerName:'Ananya Reddy',customerPhone:'+91-9876543206',customerLocation:'Chennai, TN',deliveryDate:'2024-07-10',currentKm:1500,registrationStatus:'completed',registrationNumber:'TN-09-CD-3456',registrationDates:{delivered:'2024-07-10',documents_pending:'2024-07-12',submitted:'2024-07-18',completed:'2024-08-10'},registrationNotes:{completed:'TN-09-CD-3456'},services:mkServices(1020,'2024-09-05','Vikram Singh','None'),batteryReplacement:mkBattery(),kmLog:[{month:'2024-09',km:1020}],createdAt:'2024-07-10T10:00:00Z',updatedAt:now},
-      {id:'seed-07',vin:'MAT45678901234507',model:'Cosmo',chassisNo:'CH-2024-0007',motorNo:'MT-ZF-78007',controllerNo:'CT-INV-44007',batteryPackNo:'BP-LFP-96007',manufacturingDate:'2024-07-01',customerName:'Deepak Nair',customerPhone:'+91-9876543207',customerLocation:'Ahmedabad, GJ',deliveryDate:'2024-08-05',currentKm:5800,registrationStatus:'completed',registrationNumber:'GJ-01-EF-7890',registrationDates:{delivered:'2024-08-05',documents_pending:'2024-08-07',submitted:'2024-08-12',completed:'2024-09-05'},registrationNotes:{completed:'GJ-01-EF-7890'},services:mkServices(1100,'2024-09-15','Sanjay Verma','None',5150,'2024-11-20','Sanjay Verma','Wheel alignment'),batteryReplacement:mkBattery(true,'BC-2024-001','pending','BP-LFP-96007'),kmLog:[{month:'2024-09',km:1100},{month:'2024-11',km:5150}],createdAt:'2024-08-05T10:00:00Z',updatedAt:now},
-      {id:'seed-08',vin:'MAT45678901234508',model:'Cosmo',chassisNo:'CH-2024-0008',motorNo:'MT-ZF-78008',controllerNo:'CT-INV-44008',batteryPackNo:'BP-NMC-72008',manufacturingDate:'2024-08-10',customerName:'Kavita Singh',customerPhone:'+91-9876543208',customerLocation:'Jaipur, RJ',deliveryDate:'2024-09-15',currentKm:4200,registrationStatus:'submitted',registrationNumber:'',registrationDates:{delivered:'2024-09-15',documents_pending:'2024-09-17',submitted:'2024-09-22'},registrationNotes:{submitted:'Pending RTO appointment'},services:mkServices(1050,'2024-10-20','Manoj Sharma','None'),batteryReplacement:mkBattery(),kmLog:[{month:'2024-10',km:1050}],createdAt:'2024-09-15T10:00:00Z',updatedAt:now},
-      {id:'seed-09',vin:'MAT45678901234509',model:'Comet',chassisNo:'CH-2024-0009',motorNo:'MT-ZF-78009',controllerNo:'CT-INV-44009',batteryPackNo:'BP-LFP-96009',manufacturingDate:'2024-09-05',customerName:'Rohit Deshmukh',customerPhone:'+91-9876543209',customerLocation:'Kolkata, WB',deliveryDate:'2024-10-10',currentKm:1800,registrationStatus:'delivered',registrationNumber:'',registrationDates:{delivered:'2024-10-10'},registrationNotes:{},services:mkServices(1050,'2024-11-25','Amit Yadav','None'),batteryReplacement:mkBattery(true,'BC-2024-002','pending','BP-LFP-96009'),kmLog:[{month:'2024-11',km:1050}],createdAt:'2024-10-10T10:00:00Z',updatedAt:now},
-      {id:'seed-10',vin:'MAT45678901234510',model:'Comet',chassisNo:'CH-2024-0010',motorNo:'MT-ZF-78100',controllerNo:'CT-INV-44100',batteryPackNo:'BP-NMC-72100',manufacturingDate:'2024-10-01',customerName:'Sunita Patil',customerPhone:'+91-9876543210',customerLocation:'Lucknow, UP',deliveryDate:'2024-11-05',currentKm:600,registrationStatus:'documents_pending',registrationNumber:'',registrationDates:{delivered:'2024-11-05',documents_pending:'2024-11-07'},registrationNotes:{documents_pending:'Insurance documents pending'},services:mkServices(),batteryReplacement:mkBattery(),kmLog:[],createdAt:'2024-11-05T10:00:00Z',updatedAt:now}
+      {id:'seed-01',vin:'MAT45678901234501',model:'CT2',chassisNo:'CH-2024-0001',motorNo:'MT-ZF-78001',controllerNo:'CT-INV-44001',batteryPackNo:'BP-LFP-96001',manufacturingDate:'2024-01-10',customerName:'Rajesh Mehra',customerPhone:'+91 98765 43201',customerLocation:'Mumbai, MH',deliveryDate:'2024-02-15',currentKm:12500,registrationStatus:'completed',registrationNumber:'MH-02-XX-1234',registrationDates:{delivered:'2024-02-15',documents_pending:'2024-02-17',submitted:'2024-02-22',completed:'2024-03-15'},registrationNotes:{completed:'MH-02-XX-1234'},services:mkServices(1050,'2024-03-20','Vikram Singh','None',5200,'2024-06-15','Rajesh Kumar','Minor brake pad adjustment',10100,'2024-10-05','Vikram Singh','Tyre rotation done'),batteryReplacement:mkBattery(true,'BC-2024-001','completed','BP-LFP-96001','BP-LFP-96001-R','2024-07-20','Arjun Patel',true),kmLog:[{month:'2024-03',km:1200},{month:'2024-06',km:5200},{month:'2024-10',km:10100}],createdAt:'2024-02-15T10:00:00Z',updatedAt:now},
+      {id:'seed-02',vin:'MAT45678901234502',model:'CT2',chassisNo:'CH-2024-0002',motorNo:'MT-ZF-78002',controllerNo:'CT-INV-44002',batteryPackNo:'BP-LFP-96002',manufacturingDate:'2024-02-05',customerName:'Priya Sharma',customerPhone:'+91 98765 43202',customerLocation:'Delhi, DL',deliveryDate:'2024-03-01',currentKm:8700,registrationStatus:'completed',registrationNumber:'DL-3C-AB-5678',registrationDates:{delivered:'2024-03-01',documents_pending:'2024-03-03',submitted:'2024-03-08',completed:'2024-04-01'},registrationNotes:{completed:'DL-3C-AB-5678'},services:mkServices(1020,'2024-04-10','Sanjay Verma','None',5100,'2024-08-15','Sanjay Verma','Software update applied'),batteryReplacement:mkBattery(true,'BC-2024-001','pending','BP-LFP-96002'),kmLog:[{month:'2024-04',km:1100},{month:'2024-08',km:5100}],createdAt:'2024-03-01T10:00:00Z',updatedAt:now},
+      {id:'seed-03',vin:'MAT45678901234503',model:'CT2',chassisNo:'CH-2024-0003',motorNo:'MT-ZF-78003',controllerNo:'CT-INV-44003',batteryPackNo:'BP-LFP-96003',manufacturingDate:'2024-03-12',customerName:'Amit Joshi',customerPhone:'+91-9876543203',customerLocation:'Bengaluru, KA',deliveryDate:'2024-04-10',currentKm:6200,registrationStatus:'submitted',registrationNumber:'',registrationDates:{delivered:'2024-04-10',documents_pending:'2024-04-12',submitted:'2024-04-18'},registrationNotes:{submitted:'Submitted to RTO Bengaluru East'},services:mkServices(950,'2024-05-20','Manoj Sharma','None',5050,'2024-09-10','Manoj Sharma','AC gas top-up'),batteryReplacement:mkBattery(),kmLog:[{month:'2024-05',km:800},{month:'2024-09',km:5050}],createdAt:'2024-04-10T10:00:00Z',updatedAt:now},
+      {id:'seed-04',vin:'MAT45678901234504',model:'CO1',chassisNo:'CH-2024-0004',motorNo:'MT-ZF-78004',controllerNo:'CT-INV-44004',batteryPackNo:'BP-NMC-72004',manufacturingDate:'2024-04-20',customerName:'Sneha Kulkarni',customerPhone:'+91-9876543204',customerLocation:'Pune, MH',deliveryDate:'2024-05-25',currentKm:3800,registrationStatus:'completed',registrationNumber:'MH-12-YZ-9012',registrationDates:{delivered:'2024-05-25',documents_pending:'2024-05-27',submitted:'2024-06-01',completed:'2024-06-28'},registrationNotes:{completed:'MH-12-YZ-9012'},services:mkServices(1080,'2024-07-05','Amit Yadav','None'),batteryReplacement:mkBattery(true,'BC-2024-001','in_progress','BP-NMC-72004','','','Arjun Patel'),kmLog:[{month:'2024-07',km:1080}],createdAt:'2024-05-25T10:00:00Z',updatedAt:now},
+      {id:'seed-05',vin:'MAT45678901234505',model:'CT2',chassisNo:'CH-2024-0005',motorNo:'MT-ZF-78005',controllerNo:'CT-INV-44005',batteryPackNo:'BP-LFP-96005',manufacturingDate:'2024-05-15',customerName:'Vikash Gupta',customerPhone:'+91-9876543205',customerLocation:'Hyderabad, TS',deliveryDate:'2024-06-20',currentKm:2100,registrationStatus:'documents_pending',registrationNumber:'',registrationDates:{delivered:'2024-06-20',documents_pending:'2024-06-22'},registrationNotes:{documents_pending:'Waiting for address proof from customer'},services:mkServices(1050,'2024-08-10','Rajesh Kumar','None'),batteryReplacement:mkBattery(),kmLog:[{month:'2024-08',km:1050}],createdAt:'2024-06-20T10:00:00Z',updatedAt:now},
+      {id:'seed-06',vin:'MAT45678901234506',model:'CO1',chassisNo:'CH-2024-0006',motorNo:'MT-ZF-78006',controllerNo:'CT-INV-44006',batteryPackNo:'BP-NMC-72006',manufacturingDate:'2024-06-01',customerName:'Ananya Reddy',customerPhone:'+91-9876543206',customerLocation:'Chennai, TN',deliveryDate:'2024-07-10',currentKm:1500,registrationStatus:'completed',registrationNumber:'TN-09-CD-3456',registrationDates:{delivered:'2024-07-10',documents_pending:'2024-07-12',submitted:'2024-07-18',completed:'2024-08-10'},registrationNotes:{completed:'TN-09-CD-3456'},services:mkServices(1020,'2024-09-05','Vikram Singh','None'),batteryReplacement:mkBattery(),kmLog:[{month:'2024-09',km:1020}],createdAt:'2024-07-10T10:00:00Z',updatedAt:now},
+      {id:'seed-07',vin:'MAT45678901234507',model:'CO1',chassisNo:'CH-2024-0007',motorNo:'MT-ZF-78007',controllerNo:'CT-INV-44007',batteryPackNo:'BP-LFP-96007',manufacturingDate:'2024-07-01',customerName:'Deepak Nair',customerPhone:'+91-9876543207',customerLocation:'Ahmedabad, GJ',deliveryDate:'2024-08-05',currentKm:5800,registrationStatus:'completed',registrationNumber:'GJ-01-EF-7890',registrationDates:{delivered:'2024-08-05',documents_pending:'2024-08-07',submitted:'2024-08-12',completed:'2024-09-05'},registrationNotes:{completed:'GJ-01-EF-7890'},services:mkServices(1100,'2024-09-15','Sanjay Verma','None',5150,'2024-11-20','Sanjay Verma','Wheel alignment'),batteryReplacement:mkBattery(true,'BC-2024-001','pending','BP-LFP-96007'),kmLog:[{month:'2024-09',km:1100},{month:'2024-11',km:5150}],createdAt:'2024-08-05T10:00:00Z',updatedAt:now},
+      {id:'seed-08',vin:'MAT45678901234508',model:'CO1',chassisNo:'CH-2024-0008',motorNo:'MT-ZF-78008',controllerNo:'CT-INV-44008',batteryPackNo:'BP-NMC-72008',manufacturingDate:'2024-08-10',customerName:'Kavita Singh',customerPhone:'+91-9876543208',customerLocation:'Jaipur, RJ',deliveryDate:'2024-09-15',currentKm:4200,registrationStatus:'submitted',registrationNumber:'',registrationDates:{delivered:'2024-09-15',documents_pending:'2024-09-17',submitted:'2024-09-22'},registrationNotes:{submitted:'Pending RTO appointment'},services:mkServices(1050,'2024-10-20','Manoj Sharma','None'),batteryReplacement:mkBattery(),kmLog:[{month:'2024-10',km:1050}],createdAt:'2024-09-15T10:00:00Z',updatedAt:now},
+      {id:'seed-09',vin:'MAT45678901234509',model:'CT2',chassisNo:'CH-2024-0009',motorNo:'MT-ZF-78009',controllerNo:'CT-INV-44009',batteryPackNo:'BP-LFP-96009',manufacturingDate:'2024-09-05',customerName:'Rohit Deshmukh',customerPhone:'+91-9876543209',customerLocation:'Kolkata, WB',deliveryDate:'2024-10-10',currentKm:1800,registrationStatus:'delivered',registrationNumber:'',registrationDates:{delivered:'2024-10-10'},registrationNotes:{},services:mkServices(1050,'2024-11-25','Amit Yadav','None'),batteryReplacement:mkBattery(true,'BC-2024-002','pending','BP-LFP-96009'),kmLog:[{month:'2024-11',km:1050}],createdAt:'2024-10-10T10:00:00Z',updatedAt:now},
+      {id:'seed-10',vin:'MAT45678901234510',model:'CT2',chassisNo:'CH-2024-0010',motorNo:'MT-ZF-78100',controllerNo:'CT-INV-44100',batteryPackNo:'BP-NMC-72100',manufacturingDate:'2024-10-01',customerName:'Sunita Patil',customerPhone:'+91-9876543210',customerLocation:'Lucknow, UP',deliveryDate:'2024-11-05',currentKm:600,registrationStatus:'documents_pending',registrationNumber:'',registrationDates:{delivered:'2024-11-05',documents_pending:'2024-11-07'},registrationNotes:{documents_pending:'Insurance documents pending'},services:mkServices(),batteryReplacement:mkBattery(),kmLog:[],createdAt:'2024-11-05T10:00:00Z',updatedAt:now}
     ];
   }
 
@@ -86,11 +138,19 @@ const Store = (() => {
   async function sync() {
     // If in offline mode, load from localStorage
     if (isOfflineMode()) {
-      const stored = loadOfflineVehicles();
+      let stored = loadOfflineVehicles();
+      if (stored && stored.length > 0) {
+        const hasLegacy = stored.some(v => v.model === 'Comet' || v.model === 'Cosmo');
+        if (hasLegacy) {
+          console.warn('Store: Legacy models (Comet/Cosmo) detected in offline cache, clearing...');
+          localStorage.removeItem('ev_offline_vehicles');
+          stored = null;
+        }
+      }
       if (stored && stored.length > 0) {
         cache.vehicles = stored;
       } else {
-        // First time offline — load seed data
+        // First time offline or cache cleared — load seed data
         cache.vehicles = getSeedData();
         saveOfflineVehicles(cache.vehicles);
       }
@@ -148,6 +208,7 @@ const Store = (() => {
   }
 
   async function addVehicle(vehicle) {
+    assertWritable();
     // Offline mode: save to localStorage
     if (isOfflineMode()) {
       const newV = { ...vehicle, id: 'local-' + Date.now(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -178,6 +239,7 @@ const Store = (() => {
   }
 
   async function updateVehicle(id, updates) {
+    assertWritable();
     // Offline mode: update localStorage
     if (isOfflineMode()) {
       const idx = cache.vehicles.findIndex(v => v.id === id);
@@ -211,6 +273,7 @@ const Store = (() => {
   }
 
   async function deleteVehicle(id) {
+    assertWritable();
     // Offline mode: remove from localStorage
     if (isOfflineMode()) {
       cache.vehicles = cache.vehicles.filter(v => v.id !== id);

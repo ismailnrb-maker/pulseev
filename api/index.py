@@ -3,6 +3,7 @@ import csv
 import io
 import uuid
 import datetime
+import re
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -60,6 +61,27 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
 
+
+def validate_vehicle_identity(payload: dict, partial: bool = False):
+    """Reject pitch-breaking identity and contact data at the API boundary."""
+    vin = str(payload.get("vin", "")).strip().upper()
+    name = str(payload.get("customerName", "")).strip()
+    phone = str(payload.get("customerPhone", "")).strip()
+    delivery = str(payload.get("deliveryDate", "")).strip()
+    if (not partial or "vin" in payload) and not re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin):
+        raise HTTPException(status_code=400, detail="VIN must contain exactly 17 valid characters")
+    if (not partial or "customerName" in payload) and (len(name) < 5 or " " not in name):
+        raise HTTPException(status_code=400, detail="Enter the customer's full name")
+    if (not partial or "customerPhone" in payload) and not re.fullmatch(r"\+91 [6-9]\d{4} \d{5}", phone):
+        raise HTTPException(status_code=400, detail="Phone must use the format +91 98765 43210")
+    if not partial or "deliveryDate" in payload:
+        try:
+            handover = datetime.date.fromisoformat(delivery)
+            if handover > datetime.date.today():
+                raise ValueError
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Handover date must be a valid past or current date")
+
 # --- Authentication Routes ---
 
 @app.post("/api/register")
@@ -98,6 +120,11 @@ def list_vehicles(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    # Auto-migrate legacy database records if present
+    db.query(Vehicle).filter(Vehicle.model == 'Comet').update({Vehicle.model: 'CT2'}, synchronize_session=False)
+    db.query(Vehicle).filter(Vehicle.model == 'Cosmo').update({Vehicle.model: 'CO1'}, synchronize_session=False)
+    db.commit()
+
     vehicles = db.query(Vehicle).all()
     return vehicles
 
@@ -118,6 +145,7 @@ def create_vehicle(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    validate_vehicle_identity(payload)
     # Ensure unique VIN
     vin_val = payload.get("vin", "").strip().upper()
     if not vin_val:
@@ -150,7 +178,7 @@ def create_vehicle(
     new_v = Vehicle(
         id=str(uuid.uuid4()),
         vin=vin_val,
-        model=payload.get("model", "Comet"),
+        model=payload.get("model", "CT2"),
         chassisNo=payload.get("chassisNo", ""),
         motorNo=payload.get("motorNo", ""),
         controllerNo=payload.get("controllerNo", ""),
@@ -183,6 +211,7 @@ def update_vehicle(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    validate_vehicle_identity(payload, partial=True)
     v = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not v:
         raise HTTPException(status_code=404, detail="Vehicle not found")
@@ -280,9 +309,16 @@ async def import_csv(
         for idx, h in enumerate(headers):
             vehicle_row[h] = row[idx].strip() if idx < len(row) else ""
 
+        validate_vehicle_identity({
+            "vin": vin_val,
+            "customerName": vehicle_row.get("customerName", ""),
+            "customerPhone": vehicle_row.get("customerPhone", ""),
+            "deliveryDate": vehicle_row.get("deliveryDate", "")
+        })
+
         # Parse variables
         current_km = int(vehicle_row.get("currentKm", "0") or "0")
-        model = vehicle_row.get("model", "Comet")
+        model = vehicle_row.get("model", "CT2")
         mfg_date = vehicle_row.get("manufacturingDate") or datetime.date.today().isoformat()
         del_date = vehicle_row.get("deliveryDate") or datetime.date.today().isoformat()
 

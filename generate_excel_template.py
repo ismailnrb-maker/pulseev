@@ -7,7 +7,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-def generate_vehicles_data(count=200):
+def generate_vehicles_data(count=18):
     random.seed(42)
     
     first_names = ['Rajesh', 'Priya', 'Amit', 'Sneha', 'Vikash', 'Ananya', 'Deepak', 'Kavita', 'Rohit', 'Sunita', 'Aarav', 'Vihaan', 'Aditya', 'Sai', 'Arjun', 'Krishna', 'Ishaan', 'Shaurya', 'Pranav', 'Aryan', 'Diya', 'Ananya', 'Aanya', 'Pihu', 'Prisha', 'Saanvi', 'Anika', 'Zara', 'Meera', 'Riya', 'Rahul', 'Sanjay', 'Manoj', 'Rohan', 'Karan', 'Dev', 'Vijay', 'Raj', 'Alok', 'Vikram']
@@ -26,8 +26,8 @@ def generate_vehicles_data(count=200):
     
     vehicles = []
     
-    # Keep models saturated at 70% Comet, 30% Cosmo
-    models = ['Comet'] * 140 + ['Cosmo'] * 60
+    # Keep models saturated at 70% CT2, 30% CO1
+    models = ['CT2'] * 140 + ['CO1'] * 60
     
     # Keep battery at 50% affected (100 vehicles)
     # Among affected (100 vehicles), 60% replaced (60 vehicles), 20% in_progress (20), 20% pending (20)
@@ -83,7 +83,7 @@ def generate_vehicles_data(count=200):
         
         # Customer info
         cust_name = f"{random.choice(first_names)} {random.choice(last_names)}"
-        cust_phone = f"+91-98765{random.randint(10000, 99999)}"
+        cust_phone = f"+91 98765 {41001 + i:05d}"
         
         # Registration Status
         # If delivered > 2 months, completion is high (completed)
@@ -156,7 +156,7 @@ def generate_vehicles_data(count=200):
         is_affected = bat_status != 'not_affected'
         campaign_id = 'BC-2024-001' if is_affected else ''
         
-        battery_prefix = 'BP-LFP-96' if model == 'Comet' else 'BP-NMC-72'
+        battery_prefix = 'BP-LFP-96' if model == 'CT2' else 'BP-NMC-72'
         old_serial = f"{battery_prefix}{i+1:03d}"
         
         if bat_status == 'completed':
@@ -277,13 +277,13 @@ def create_excel_template():
 
     field_rules = [
         ("vin", "YES", "Alphanumeric string", "VIN / Chassis Number (Primary Key)."),
-        ("model", "YES", "Text (Comet or Cosmo)", "Specific EV model name. Must match allowed list."),
+        ("model", "YES", "Text (CT2 or CO1)", "Specific EV model name. Must match allowed list."),
         ("motorNo", "YES", "Alphanumeric string (e.g. MT-ZF-78001)", "Electric Motor serial identification number."),
         ("controllerNo", "NO", "Alphanumeric string (e.g. CT-INV-44001)", "Controller unit serial number."),
         ("batteryPackNo", "NO", "Alphanumeric string (e.g. BP-LFP-96001)", "Active Battery Pack serial number."),
         ("manufacturingDate", "YES", "YYYY-MM-DD (Date)", "Date of purchase."),
         ("customerName", "YES", "Full Name string", "Assigned customer owner's name."),
-        ("customerPhone", "YES", "Phone pattern (e.g. +91-98765-43210)", "Contact mobile/WhatsApp number."),
+        ("customerPhone", "YES", "Phone pattern (e.g. +91 98765 43210)", "Contact mobile/WhatsApp number."),
         ("customerLocation", "YES", "City, State (e.g. Mumbai, MH)", "Delivery region / operational city location."),
         ("deliveryDate", "YES", "YYYY-MM-DD (Date)", "Date of vehicle handover to customer."),
         ("currentKm", "NO", "Positive integer (e.g. 1500)", "Current odometer reading in kilometers (Defaults to 0)."),
@@ -355,10 +355,10 @@ def create_excel_template():
         cell.border = thin_border
     ws_tpl.row_dimensions[1].height = 28
     
-    # Generate the 200 customer data points
-    vehicles_data = generate_vehicles_data(200)
+    # Generate a compact set of pitch-ready demonstration records
+    vehicles_data = generate_vehicles_data(18)
     
-    # Write the 200 records to the template
+    # Write the curated-size demonstration set to the template
     for idx, v in enumerate(vehicles_data):
         row_idx = idx + 2
         is_zebra = (row_idx % 2 == 0)
@@ -404,10 +404,10 @@ def create_excel_template():
         ws_tpl.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
     # Data Validations (Dropdown limits)
-    dv_model = DataValidation(type="list", formula1='"Comet,Cosmo"', allow_blank=True)
-    dv_model.error = 'Your entry is not in the list of allowed vehicle models (Comet, Cosmo)'
+    dv_model = DataValidation(type="list", formula1='"CT2,CO1"', allow_blank=True)
+    dv_model.error = 'Your entry is not in the list of allowed vehicle models (CT2, CO1)'
     dv_model.errorTitle = 'Invalid Model'
-    dv_model.prompt = 'Please select Comet or Cosmo'
+    dv_model.prompt = 'Please select CT2 or CO1'
     dv_model.promptTitle = 'Select EV Model'
     ws_tpl.add_data_validation(dv_model)
     dv_model.add("B2:B300")
@@ -434,7 +434,7 @@ def create_excel_template():
     dv_bool.add("U2:U300")
 
     wb.save("ev_lifecycle_template.xlsx")
-    print("Excel template 'ev_lifecycle_template.xlsx' (with 200 data points) created successfully.")
+    print("Excel template 'ev_lifecycle_template.xlsx' (with 18 demo records) created successfully.")
 
 def create_csv_template():
     headers = [
@@ -446,7 +446,7 @@ def create_csv_template():
         "batteryReplacementTechnician", "batteryReplacementCustomerConfirmed"
     ]
     
-    vehicles_data = generate_vehicles_data(200)
+    vehicles_data = generate_vehicles_data(18)
     
     with open("ev_lifecycle_template.csv", mode="w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -479,7 +479,7 @@ def create_csv_template():
             ]
             writer.writerow(row_values)
             
-    print("CSV template 'ev_lifecycle_template.csv' (with 200 data points) created successfully.")
+    print("CSV template 'ev_lifecycle_template.csv' (with 18 demo records) created successfully.")
 
 if __name__ == "__main__":
     create_excel_template()

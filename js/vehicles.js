@@ -37,8 +37,8 @@ const VehiclesView = (() => {
           <!-- Model quick filters -->
           <div class="filter-group">
             <button class="filter-btn ${activeFilter === 'All' ? 'active' : ''}" onclick="VehiclesView.setFilter('All')">All Specs</button>
-            <button class="filter-btn ${activeFilter === 'Comet' ? 'active' : ''}" onclick="VehiclesView.setFilter('Comet')">Comet</button>
-            <button class="filter-btn ${activeFilter === 'Cosmo' ? 'active' : ''}" onclick="VehiclesView.setFilter('Cosmo')">Cosmo</button>
+            <button class="filter-btn ${activeFilter === 'CT2' ? 'active' : ''}" onclick="VehiclesView.setFilter('CT2')">CT2</button>
+            <button class="filter-btn ${activeFilter === 'CO1' ? 'active' : ''}" onclick="VehiclesView.setFilter('CO1')">CO1</button>
           </div>
         </div>
 

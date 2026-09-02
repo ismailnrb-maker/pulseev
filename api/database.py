@@ -68,6 +68,12 @@ class SessionLog(Base):
     durationSeconds = Column(Integer, default=0, nullable=False)
 
 
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+    key = Column(String(100), primary_key=True)
+    value = Column(String(200), nullable=False)
+
+
 class Vehicle(Base):
     __tablename__ = "vehicles"
     id = Column(String(50), primary_key=True, index=True)
@@ -101,6 +107,51 @@ class Vehicle(Base):
     updatedAt = Column(String(30), nullable=False)
 
 
+def generate_curated_demo_vehicles():
+    """Create a small, deterministic pitch fleet with deliberate lifecycle cases."""
+    profiles = [
+        ("Arjun Mehta", "+91 98765 41001", "Mumbai, MH", "CT2", "2025-10-18", 24500, "completed"),
+        ("Priya Nair", "+91 98765 41002", "Bengaluru, KA", "CT2", "2026-01-12", 15800, "completed"),
+        ("Rohan Kulkarni", "+91 98765 41003", "Pune, MH", "CO1", "2026-02-08", 11250, "completed"),
+        ("Sneha Reddy", "+91 98765 41004", "Hyderabad, TS", "CT2", "2026-04-15", 4700, "completed"),
+        ("Vikram Shah", "+91 98765 41005", "Ahmedabad, GJ", "CO1", "2026-08-10", 650, "submitted"),
+        ("Ananya Bose", "+91 98765 41006", "Kolkata, WB", "CT2", "2026-03-20", 7800, "completed"),
+        ("Karan Malhotra", "+91 98765 41007", "Delhi, DL", "CO1", "2026-03-02", 6400, "completed"),
+        ("Meera Iyer", "+91 98765 41008", "Chennai, TN", "CT2", "2025-12-11", 12000, "completed"),
+        ("Rahul Verma", "+91 98765 41009", "Jaipur, RJ", "CO1", "2026-06-22", 1350, "documents_pending"),
+        ("Ishita Rao", "+91 98765 41010", "Lucknow, UP", "CT2", "2026-02-26", 10800, "completed"),
+        ("Aditya Singh", "+91 98765 41011", "Mumbai, MH", "CO1", "2026-05-09", 5200, "completed"),
+        ("Kavya Menon", "+91 98765 41012", "Bengaluru, KA", "CT2", "2026-01-29", 9200, "completed"),
+        ("Nikhil Desai", "+91 98765 41013", "Pune, MH", "CT2", "2026-08-25", 180, "delivered"),
+        ("Saanvi Gupta", "+91 98765 41014", "Delhi, DL", "CO1", "2026-08-16", 420, "documents_pending"),
+        ("Dev Patel", "+91 98765 41015", "Ahmedabad, GJ", "CT2", "2026-03-18", 6200, "submitted"),
+        ("Neha Joshi", "+91 98765 41016", "Hyderabad, TS", "CO1", "2026-07-04", 980, "completed"),
+        ("Aarav Kapoor", "+91 98765 41017", "Chennai, TN", "CT2", "2026-06-05", 2100, "completed"),
+        ("Diya Sharma", "+91 98765 41018", "Jaipur, RJ", "CO1", "2026-08-28", 95, "delivered"),
+    ]
+    prefixes = {"Mumbai, MH":"MH-02", "Bengaluru, KA":"KA-03", "Pune, MH":"MH-12", "Hyderabad, TS":"TS-09", "Ahmedabad, GJ":"GJ-01", "Kolkata, WB":"WB-02", "Delhi, DL":"DL-3C", "Chennai, TN":"TN-09", "Jaipur, RJ":"RJ-14", "Lucknow, UP":"UP-32"}
+    milestones = [1000, 5000, 10000, 20000]
+    now_str = datetime.datetime.utcnow().isoformat() + "Z"
+    vehicles = []
+    for i, (name, phone, location, model, delivery, km, reg_status) in enumerate(profiles, 1):
+        vin_model = "C01" if model == "CO1" else model
+        vin = f"MPEV26{vin_model}A{i:07d}"
+        completed_count = sum(km >= due for due in milestones)
+        if i == 3: completed_count = 2
+        if i in (6, 7): completed_count = 0
+        if i in (8, 15): completed_count = 1
+        services = []
+        for service_no, due_km in enumerate(milestones, 1):
+            completed = service_no <= completed_count or (i == 7 and service_no == 2)
+            services.append({"serviceNumber":service_no, "dueKm":due_km, "completedKm":due_km + 40 + i * 7 if completed else 0, "date":f"2026-{min(8, service_no + 2):02d}-{min(27, 5 + i):02d}" if completed else "", "technician":["Vikram Singh", "Manoj Sharma", "Amit Yadav"][i % 3] if completed else "", "issues":"Routine inspection completed" if completed else ""})
+        affected = i in (10, 11, 12)
+        battery_status = {10:"pending", 11:"in_progress", 12:"completed"}.get(i, "not_affected")
+        battery_serial = f"BP-{'LFP96' if model == 'CT2' else 'NMC72'}-{i:04d}"
+        reg_number = f"{prefixes[location]}-EV-{4100+i}" if reg_status == "completed" else ""
+        vehicles.append(Vehicle(id=f"demo-{i:02d}", vin=vin, model=model, chassisNo=vin, motorNo=f"MTR-26-{i:05d}", controllerNo=f"CTRL-26-{i:05d}", batteryPackNo=battery_serial, manufacturingDate=(datetime.date.fromisoformat(delivery) - datetime.timedelta(days=18)).isoformat(), customerName=name, customerPhone=phone, customerLocation=location, deliveryDate=delivery, currentKm=km, registrationStatus=reg_status, registrationNumber=reg_number, registrationDates={"delivered":delivery, reg_status:delivery}, registrationNotes={"completed":reg_number} if reg_number else {}, services=services, batteryReplacement={"affected":affected, "campaignId":"BC-2026-01" if affected else "", "status":battery_status, "oldSerial":battery_serial if affected else "", "newSerial":f"{battery_serial}-R" if battery_status == "completed" else "", "replacementDate":"2026-08-12" if battery_status == "completed" else "", "technician":"Arjun Patel" if battery_status in ("in_progress", "completed") else "", "customerConfirmed":battery_status == "completed"}, kmLog=[{"month":delivery[:7], "km":0}, {"month":"2026-08", "km":km}], createdAt=now_str, updatedAt=now_str))
+    return vehicles
+
+
 # ── DB Init (seeding) ─────────────────────────────────────────────────────────
 def generate_seed_vehicles(count=200):
     import random
@@ -120,7 +171,7 @@ def generate_seed_vehicles(count=200):
     }
     
     vehicles = []
-    models = ['Comet'] * 140 + ['Cosmo'] * 60
+    models = ['CT2'] * 140 + ['CO1'] * 60
     battery_statuses = (
         [('completed', True)] * 60 +
         [('in_progress', False)] * 20 +
@@ -163,7 +214,7 @@ def generate_seed_vehicles(count=200):
         
         location = random.choice(cities)
         cust_name = f"{random.choice(first_names)} {random.choice(last_names)}"
-        cust_phone = f"+91-98765{random.randint(10000, 99999)}"
+        cust_phone = f"+91 98765 {random.randint(10000, 99999)}"
         
         if months_active >= 2:
             reg_status = 'completed'
@@ -231,7 +282,7 @@ def generate_seed_vehicles(count=200):
         is_affected = bat_status != 'not_affected'
         campaign_id = 'BC-2024-001' if is_affected else ''
         
-        battery_prefix = 'BP-LFP-96' if model == 'Comet' else 'BP-NMC-72'
+        battery_prefix = 'BP-LFP-96' if model == 'CT2' else 'BP-NMC-72'
         old_serial = f"{battery_prefix}{i+1:03d}"
         
         if bat_status == 'completed':
@@ -338,13 +389,18 @@ def init_db():
                 db.commit()
                 print("Updated existing master user to master role.")
 
-        # Seed 200 vehicle profiles if empty
-        vehicle_count = db.query(Vehicle).count()
-        if vehicle_count == 0:
-            vehicles = generate_seed_vehicles(200)
-            db.add_all(vehicles)
+        # Replace accumulated test/import rows exactly once for the pitch build.
+        dataset_version = "pitch-demo-v1"
+        setting = db.query(AppSetting).filter(AppSetting.key == "demo_dataset_version").first()
+        if not setting or setting.value != dataset_version:
+            db.query(Vehicle).delete(synchronize_session=False)
+            db.add_all(generate_curated_demo_vehicles())
+            if setting:
+                setting.value = dataset_version
+            else:
+                db.add(AppSetting(key="demo_dataset_version", value=dataset_version))
             db.commit()
-            print("Seeded 200 vehicle profiles.")
+            print("Installed curated 18-vehicle pitch dataset.")
     except Exception as e:
         db.rollback()
         print(f"init_db seeding failed: {e}")
